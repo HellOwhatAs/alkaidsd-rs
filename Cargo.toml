@@ -1,0 +1,32 @@
+[package]
+name = "alkaidsd"
+version = "1.0.0"
+edition = "2021"
+description = "Split Delivery Vehicle Routing Problem (SDVRP) solver"
+authors = ["HellOwhatAs"]
+license = "MIT"
+
+[dependencies]
+
+[dev-dependencies]
+
+[lib]
+name = "alkaidsd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "alkaidsd"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"
+
+[features]
+default = []
+cli = []
+
+[profile.release]
+lto = true
+codegen-units = 1
