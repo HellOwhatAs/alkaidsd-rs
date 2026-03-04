@@ -122,7 +122,8 @@ impl RouteContext {
     /// Sets the number of routes.
     #[inline]
     pub fn set_num_routes(&mut self, num_routes: Node) {
-        self.routes.resize(num_routes as usize, RouteData::default());
+        self.routes
+            .resize(num_routes as usize, RouteData::default());
     }
 
     /// Adds a new route with the given head, tail, and load.
@@ -178,7 +179,12 @@ impl RouteContext {
     /// * `solution` - The solution
     /// * `route_index` - Index of the route to update
     /// * `predecessor` - Node to start updating from (0 for route start)
-    pub fn update_route_context(&mut self, solution: &AlkaidSolution, route_index: Node, predecessor: Node) {
+    pub fn update_route_context(
+        &mut self,
+        solution: &AlkaidSolution,
+        route_index: Node,
+        predecessor: Node,
+    ) {
         // Ensure pre_loads is large enough
         let required_size = (solution.max_node_index() + 1) as usize;
         if self.pre_loads.len() < required_size {
@@ -187,8 +193,12 @@ impl RouteContext {
 
         // When starting from depot (predecessor == 0), the cumulative load is 0.
         // When starting from a node, we use its stored cumulative load.
-        let mut load: i32 = self.pre_loads.get(predecessor as usize).copied().unwrap_or(0);
-        
+        let mut load: i32 = self
+            .pre_loads
+            .get(predecessor as usize)
+            .copied()
+            .unwrap_or(0);
+
         let mut node_index = if predecessor != 0 {
             solution.successor(predecessor)
         } else {

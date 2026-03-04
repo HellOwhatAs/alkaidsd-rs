@@ -51,7 +51,9 @@ impl RandomRuin {
     ///
     /// * `num_perturb_customers` - List of possible perturbation sizes
     pub fn new(num_perturb_customers: Vec<i32>) -> Self {
-        Self { num_perturb_customers }
+        Self {
+            num_perturb_customers,
+        }
     }
 }
 
@@ -165,7 +167,8 @@ impl RuinMethod for SisrsRuin {
         // Calculate parameters
         let average_length = (instance.num_customers - 1) as f64 / context.num_routes() as f64;
         let max_length = (self.max_length as f64).min(average_length);
-        let max_strings = 4.0 * self.average_customers as f64 / (1.0 + self.max_length as f64) - 1.0;
+        let max_strings =
+            4.0 * self.average_customers as f64 / (1.0 + self.max_length as f64) - 1.0;
         let num_strings = (random.next_float() as f64 * max_strings) as usize + 1;
 
         // Select seed customer
@@ -204,7 +207,10 @@ impl RuinMethod for SisrsRuin {
             let mut num_preserved = 0;
             let mut preserved_start_position = -1i32;
 
-            if ruin_length >= 2 && ruin_length < route_length && (random.next_float() as f64) < self.split_rate {
+            if ruin_length >= 2
+                && ruin_length < route_length
+                && (random.next_float() as f64) < self.split_rate
+            {
                 while ruin_length < route_length {
                     if (random.next_float() as f64) < self.preserved_probability {
                         break;

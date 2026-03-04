@@ -77,7 +77,9 @@ impl<const N: usize> BestInsertion<N> {
                     successor,
                 };
                 return;
-            } else if delta == self.insertions[i].delta.value && self.insertions[i].delta.counter != -1 {
+            } else if delta == self.insertions[i].delta.value
+                && self.insertions[i].delta.counter != -1
+            {
                 // Equal value - use reservoir sampling
                 if random.next_int(1, self.insertions[i].delta.counter + 1) == 1 {
                     // Selected: shift down and insert at position i
@@ -163,8 +165,16 @@ impl StarCaches {
         loop {
             let pred_customer = solution.customer(predecessor);
             let succ_customer = solution.customer(successor);
-            let pred_distances = unsafe { instance.distance_matrix.get_unchecked(pred_customer as usize) };
-            let succ_distances = unsafe { instance.distance_matrix.get_unchecked(succ_customer as usize) };
+            let pred_distances = unsafe {
+                instance
+                    .distance_matrix
+                    .get_unchecked(pred_customer as usize)
+            };
+            let succ_distances = unsafe {
+                instance
+                    .distance_matrix
+                    .get_unchecked(succ_customer as usize)
+            };
             let distance = instance.distance(pred_customer, succ_customer);
 
             for customer in 1..instance.num_customers {
@@ -190,7 +200,8 @@ impl StarCaches {
 
 impl Cache for StarCaches {
     fn reset(&mut self, solution: &AlkaidSolution, context: &RouteContext) {
-        self.caches.resize(context.num_routes() as usize, Vec::new());
+        self.caches
+            .resize(context.num_routes() as usize, Vec::new());
 
         for route_index in 0..self.caches.len().min(self.routes.len()) as Node {
             let mut same_route = false;
@@ -232,7 +243,8 @@ impl Cache for StarCaches {
 
     fn move_route(&mut self, dest_route_index: Node, src_route_index: Node) {
         if dest_route_index as usize >= self.caches.len() {
-            self.caches.resize(dest_route_index as usize + 1, Vec::new());
+            self.caches
+                .resize(dest_route_index as usize + 1, Vec::new());
         }
         // Use take and replace pattern to avoid double borrow
         let src = std::mem::take(&mut self.caches[src_route_index as usize]);
@@ -240,7 +252,8 @@ impl Cache for StarCaches {
     }
 
     fn save(&mut self, solution: &AlkaidSolution, context: &RouteContext) {
-        self.routes.resize(context.num_routes() as usize, Vec::new());
+        self.routes
+            .resize(context.num_routes() as usize, Vec::new());
 
         for route_index in 0..self.routes.len() as Node {
             let route = &mut self.routes[route_index as usize];

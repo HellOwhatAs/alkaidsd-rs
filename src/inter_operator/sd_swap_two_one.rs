@@ -14,7 +14,7 @@ use crate::solution::AlkaidSolution;
 /// Move data for the SdSwapTwoOne operator.
 #[derive(Clone, Default)]
 struct SdSwapTwoOneMove {
-    move_type: i32,  // 0 or 1
+    move_type: i32, // 0 or 1
     route_ij: Node,
     route_k: Node,
     predecessor_ij: Node,
@@ -36,7 +36,11 @@ pub struct SdSwapTwoOne;
 
 impl SdSwapTwoOne {
     /// Applies a SD swap(2,1) move.
-    fn do_sd_swap_two_one(mv: &SdSwapTwoOneMove, solution: &mut AlkaidSolution, context: &mut RouteContext) {
+    fn do_sd_swap_two_one(
+        mv: &SdSwapTwoOneMove,
+        solution: &mut AlkaidSolution,
+        context: &mut RouteContext,
+    ) {
         let predecessor_k = solution.predecessor(mv.node_k);
         let successor_k = solution.successor(mv.node_k);
 
@@ -135,14 +139,18 @@ impl SdSwapTwoOne {
         let predecessor_k = solution.predecessor(node_k);
         let successor_k = solution.successor(node_k);
 
-        let delta_ij = instance.distance(solution.customer(predecessor_k), solution.customer(node_i))
+        let delta_ij = instance
+            .distance(solution.customer(predecessor_k), solution.customer(node_i))
             + instance.distance(solution.customer(node_j), solution.customer(successor_k));
-        let delta_ji = instance.distance(solution.customer(predecessor_k), solution.customer(node_j))
+        let delta_ji = instance
+            .distance(solution.customer(predecessor_k), solution.customer(node_j))
             + instance.distance(solution.customer(node_i), solution.customer(successor_k));
 
-        let delta_jk = instance.distance(solution.customer(predecessor_ij), solution.customer(node_j))
+        let delta_jk = instance
+            .distance(solution.customer(predecessor_ij), solution.customer(node_j))
             + instance.distance(solution.customer(node_k), solution.customer(successor_ij));
-        let delta_kj = instance.distance(solution.customer(predecessor_ij), solution.customer(node_k))
+        let delta_kj = instance
+            .distance(solution.customer(predecessor_ij), solution.customer(node_k))
             + instance.distance(solution.customer(node_j), solution.customer(successor_ij));
 
         let mut best_delta_ij = delta_ij;
@@ -214,13 +222,17 @@ impl SdSwapTwoOne {
 
             for direction_ijk in [true, false] {
                 let delta_ijk = if direction_ijk {
-                    instance.distance(solution.customer(predecessor_k), solution.customer(before_ij))
-                        + instance.distance(solution.customer(after_ij), solution.customer(node_k))
-                        + instance.distance(solution.customer(node_k), solution.customer(successor_k))
+                    instance.distance(
+                        solution.customer(predecessor_k),
+                        solution.customer(before_ij),
+                    ) + instance.distance(solution.customer(after_ij), solution.customer(node_k))
+                        + instance
+                            .distance(solution.customer(node_k), solution.customer(successor_k))
                 } else {
                     instance.distance(solution.customer(predecessor_k), solution.customer(node_k))
                         + instance.distance(solution.customer(node_k), solution.customer(before_ij))
-                        + instance.distance(solution.customer(after_ij), solution.customer(successor_k))
+                        + instance
+                            .distance(solution.customer(after_ij), solution.customer(successor_k))
                 };
 
                 let delta = base_delta + delta_ijk;
@@ -267,31 +279,68 @@ impl SdSwapTwoOne {
                 let predecessor_ij = solution.predecessor(node_i);
                 let successor_ij = solution.successor(node_j);
 
-                let base_delta = -instance.distance(solution.customer(predecessor_ij), solution.customer(node_i))
+                let base_delta = -instance
+                    .distance(solution.customer(predecessor_ij), solution.customer(node_i))
                     - instance.distance(solution.customer(node_j), solution.customer(successor_ij))
-                    - instance.distance(solution.customer(solution.predecessor(node_k)), solution.customer(node_k))
-                    - instance.distance(solution.customer(node_k), solution.customer(solution.successor(node_k)));
+                    - instance.distance(
+                        solution.customer(solution.predecessor(node_k)),
+                        solution.customer(node_k),
+                    )
+                    - instance.distance(
+                        solution.customer(node_k),
+                        solution.customer(solution.successor(node_k)),
+                    );
 
                 if load_i + load_j > load_k {
                     if load_i < load_k {
                         Self::sd_swap_two_one0(
-                            instance, solution, route_ij, route_k, node_i, node_j, node_k,
-                            predecessor_ij, successor_ij, load_i + load_j - load_k, base_delta,
-                            cache, random,
+                            instance,
+                            solution,
+                            route_ij,
+                            route_k,
+                            node_i,
+                            node_j,
+                            node_k,
+                            predecessor_ij,
+                            successor_ij,
+                            load_i + load_j - load_k,
+                            base_delta,
+                            cache,
+                            random,
                         );
                     }
                     if load_j < load_k {
                         Self::sd_swap_two_one0(
-                            instance, solution, route_ij, route_k, node_j, node_i, node_k,
-                            predecessor_ij, successor_ij, load_i + load_j - load_k, base_delta,
-                            cache, random,
+                            instance,
+                            solution,
+                            route_ij,
+                            route_k,
+                            node_j,
+                            node_i,
+                            node_k,
+                            predecessor_ij,
+                            successor_ij,
+                            load_i + load_j - load_k,
+                            base_delta,
+                            cache,
+                            random,
                         );
                     }
                 } else if load_k > load_i + load_j {
                     Self::sd_swap_two_one1(
-                        instance, solution, route_ij, route_k, node_i, node_j, node_k,
-                        predecessor_ij, successor_ij, load_k - load_i - load_j, base_delta,
-                        cache, random,
+                        instance,
+                        solution,
+                        route_ij,
+                        route_k,
+                        node_i,
+                        node_j,
+                        node_k,
+                        predecessor_ij,
+                        successor_ij,
+                        load_k - load_i - load_j,
+                        base_delta,
+                        cache,
+                        random,
                     );
                 }
 

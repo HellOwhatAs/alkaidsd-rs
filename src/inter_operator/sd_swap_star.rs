@@ -37,7 +37,11 @@ pub struct SdSwapStar;
 
 impl SdSwapStar {
     /// Applies a SD swap star move.
-    fn do_sd_swap_star(mv: &SdSwapStarMove, solution: &mut AlkaidSolution, context: &mut RouteContext) {
+    fn do_sd_swap_star(
+        mv: &SdSwapStarMove,
+        solution: &mut AlkaidSolution,
+        context: &mut RouteContext,
+    ) {
         let predecessor_y = solution.predecessor(mv.node_y);
         let successor_y = solution.successor(mv.node_y);
 
@@ -74,13 +78,13 @@ impl SdSwapStar {
     ) {
         let insertion_x = star_caches.get(route_y, solution.customer(node_x));
         let insertion_y = star_caches.get(route_x, solution.customer(node_y));
-        
+
         let mut predecessor_y = solution.predecessor(node_y);
         let mut successor_y = solution.successor(node_y);
-        
+
         let delta = -calc_delta(instance, solution, node_y, predecessor_y, successor_y);
         let mut delta_x = calc_delta(instance, solution, node_x, predecessor_y, successor_y);
-        
+
         // Try to find better insertion for node_x using star cache
         if let Some(best_insertion_x) = insertion_x.find_best_without_node(node_y) {
             if best_insertion_x.delta.value < delta_x {
@@ -89,11 +93,11 @@ impl SdSwapStar {
                 successor_y = best_insertion_x.successor;
             }
         }
-        
+
         // Find best insertion for node_y using star cache
         let best_insertion_y = insertion_y.find_best();
         let total_delta = delta + delta_x + best_insertion_y.delta.value;
-            
+
         if cache.delta.update(total_delta, random) {
             cache.mv = SdSwapStarMove {
                 swapped,
@@ -132,13 +136,31 @@ impl SdSwapStar {
 
                 if load_x > load_y {
                     Self::sd_swap_star_inner_single(
-                        instance, solution, false, route_x, route_y, node_x, node_y,
-                        load_x - load_y, cache, star_caches, random,
+                        instance,
+                        solution,
+                        false,
+                        route_x,
+                        route_y,
+                        node_x,
+                        node_y,
+                        load_x - load_y,
+                        cache,
+                        star_caches,
+                        random,
                     );
                 } else if load_y > load_x {
                     Self::sd_swap_star_inner_single(
-                        instance, solution, true, route_y, route_x, node_y, node_x,
-                        load_y - load_x, cache, star_caches, random,
+                        instance,
+                        solution,
+                        true,
+                        route_y,
+                        route_x,
+                        node_y,
+                        node_x,
+                        load_y - load_x,
+                        cache,
+                        star_caches,
+                        random,
                     );
                 }
 
@@ -159,8 +181,8 @@ impl InterOperator for SdSwapStar {
         random: &mut Random,
         cache_map: &mut CacheMap,
     ) -> Vec<Node> {
-        let (caches, star_caches) = cache_map
-            .get2_mut::<InterRouteCache<SdSwapStarMove>, StarCaches>(solution, context);
+        let (caches, star_caches) =
+            cache_map.get2_mut::<InterRouteCache<SdSwapStarMove>, StarCaches>(solution, context);
         let mut best_move = SdSwapStarMove::default();
         let mut best_delta = Delta::default();
 
@@ -171,7 +193,14 @@ impl InterOperator for SdSwapStar {
                     star_caches.preprocess(instance, solution, context, route_x, random);
                     star_caches.preprocess(instance, solution, context, route_y, random);
                     Self::sd_swap_star_inner(
-                        instance, solution, context, route_x, route_y, cache, star_caches, random,
+                        instance,
+                        solution,
+                        context,
+                        route_x,
+                        route_y,
+                        cache,
+                        star_caches,
+                        random,
                     );
                 } else {
                     if !cache.mv.swapped {

@@ -147,7 +147,8 @@ impl SimulatedAnnealing {
 impl AcceptanceRule for SimulatedAnnealing {
     fn accept(&mut self, old_value: i32, new_value: i32, random: &mut Random) -> bool {
         let accepted = new_value <= old_value
-            || (random.next_float() as f64) < ((old_value - new_value) as f64 / self.temperature).exp();
+            || (random.next_float() as f64)
+                < ((old_value - new_value) as f64 / self.temperature).exp();
 
         self.temperature *= self.decay;
         accepted
@@ -163,7 +164,7 @@ mod tests {
         let mut rule = HillClimbing;
         let mut rng = Random::new(42);
 
-        assert!(rule.accept(100, 90, &mut rng));  // Better
+        assert!(rule.accept(100, 90, &mut rng)); // Better
         assert!(!rule.accept(100, 100, &mut rng)); // Equal
         assert!(!rule.accept(100, 110, &mut rng)); // Worse
     }
@@ -173,8 +174,8 @@ mod tests {
         let mut rule = HillClimbingWithEqual;
         let mut rng = Random::new(42);
 
-        assert!(rule.accept(100, 90, &mut rng));   // Better
-        assert!(rule.accept(100, 100, &mut rng));  // Equal
+        assert!(rule.accept(100, 90, &mut rng)); // Better
+        assert!(rule.accept(100, 100, &mut rng)); // Equal
         assert!(!rule.accept(100, 110, &mut rng)); // Worse
     }
 

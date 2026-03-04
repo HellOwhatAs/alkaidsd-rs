@@ -115,7 +115,9 @@ pub fn calc_delta(
     predecessor: Node,
     successor: Node,
 ) -> i32 {
-    instance.distance(solution.customer(node_index), solution.customer(predecessor))
-        + instance.distance(solution.customer(node_index), solution.customer(successor))
+    instance.distance(
+        solution.customer(node_index),
+        solution.customer(predecessor),
+    ) + instance.distance(solution.customer(node_index), solution.customer(successor))
         - instance.distance(solution.customer(predecessor), solution.customer(successor))
 }

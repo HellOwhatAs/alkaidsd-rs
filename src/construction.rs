@@ -33,8 +33,7 @@ fn calc_insertion_cost(
 
     match criterion {
         Criterion::Mcfic { gamma } => {
-            (instance.distance(pre_customer, customer)
-                + instance.distance(customer, suc_customer)
+            (instance.distance(pre_customer, customer) + instance.distance(customer, suc_customer)
                 - instance.distance(pre_customer, suc_customer)) as f32
                 - 2.0 * gamma * instance.distance(0, customer) as f32
         }
@@ -60,7 +59,7 @@ fn find_best_insertion(
 ) -> (Node, Node, Delta<f32>) {
     let head = context.head(route_index);
     let head_cost = calc_insertion_cost(instance, solution, 0, head, customer, criterion);
-    
+
     let mut best_predecessor = 0;
     let mut best_successor = head;
     let mut best_delta = Delta::new(head_cost, 1);
@@ -68,8 +67,10 @@ fn find_best_insertion(
     let mut node_index = head;
     while node_index != 0 {
         let successor = solution.successor(node_index);
-        let cost = calc_insertion_cost(instance, solution, node_index, successor, customer, criterion);
-        
+        let cost = calc_insertion_cost(
+            instance, solution, node_index, successor, customer, criterion,
+        );
+
         if best_delta.update(cost, random) {
             best_predecessor = node_index;
             best_successor = successor;
@@ -147,7 +148,13 @@ fn sequential_insertion(
                 }
 
                 let (pred, succ, delta) = find_best_insertion(
-                    instance, solution, context, route_index, customer, criterion, random,
+                    instance,
+                    solution,
+                    context,
+                    route_index,
+                    customer,
+                    criterion,
+                    random,
                 );
 
                 if best.cost.update_from(&delta, random) {
@@ -163,7 +170,8 @@ fn sequential_insertion(
                 candidate_list[pos] = *candidate_list.last().unwrap();
                 candidate_list.pop();
 
-                let node_index = solution.insert(customer, demand, best.predecessor, best.successor);
+                let node_index =
+                    solution.insert(customer, demand, best.predecessor, best.successor);
 
                 if best.predecessor == 0 {
                     context.set_head(route_index, node_index);
@@ -196,13 +204,19 @@ fn parallel_insertion(
 ) {
     // best_insertions[candidate][route] = InsertionInfo
     let mut best_insertions: Vec<Vec<InsertionInfo>> = Vec::with_capacity(candidate_list.len());
-    
+
     // Pre-compute best insertions for each candidate in each route
     for (candidate_idx, &(customer, _demand)) in candidate_list.iter().enumerate() {
         best_insertions.push(Vec::with_capacity(context.num_routes() as usize));
         for route_index in 0..context.num_routes() {
             let (pred, succ, delta) = find_best_insertion(
-                instance, solution, context, route_index, customer, criterion, random,
+                instance,
+                solution,
+                context,
+                route_index,
+                customer,
+                criterion,
+                random,
             );
             best_insertions[candidate_idx].push(InsertionInfo {
                 predecessor: pred,
@@ -213,56 +227,62 @@ fn parallel_insertion(
             });
         }
     }
-    
+
     let mut updated = vec![false; context.num_routes() as usize];
-    
+
     while !candidate_list.is_empty() {
         let mut best = InsertionInfo::default();
         let mut best_candidate_position: Option<usize> = None;
-        
+
         // Find globally best insertion
         for i in 0..best_insertions.len() {
             let mut j = 0;
             while j < best_insertions[i].len() {
                 let route_index = best_insertions[i][j].route_index;
                 let (_customer, demand) = candidate_list[i];
-                
+
                 // Check capacity constraint
                 if context.load(route_index) + demand > instance.capacity {
                     // Remove this route option
                     best_insertions[i].swap_remove(j);
                     continue;
                 }
-                
+
                 // Update if route has changed
                 if updated[route_index as usize] {
                     let (pred, succ, delta) = find_best_insertion(
-                        instance, solution, context, route_index, candidate_list[i].0, criterion, random,
+                        instance,
+                        solution,
+                        context,
+                        route_index,
+                        candidate_list[i].0,
+                        criterion,
+                        random,
                     );
                     best_insertions[i][j].predecessor = pred;
                     best_insertions[i][j].successor = succ;
                     best_insertions[i][j].cost = delta;
                 }
-                
+
                 if best.cost.update_from(&best_insertions[i][j].cost, random) {
                     best = best_insertions[i][j].clone();
                     best_candidate_position = Some(i);
                 }
-                
+
                 j += 1;
             }
         }
-        
+
         if let Some(candidate_pos) = best_candidate_position {
             let (customer, demand) = candidate_list[candidate_pos];
-            
+
             // Remove candidate from list (swap with last)
             let last_candidate_idx = candidate_list.len() - 1;
             if candidate_pos != last_candidate_idx {
                 candidate_list[candidate_pos] = candidate_list[last_candidate_idx];
             }
             candidate_list.pop();
-            
+
             // Remove candidate's insertions (swap with last)
             let last_insertion_idx = best_insertions.len() - 1;
             if candidate_pos != last_insertion_idx {
@@ -274,11 +294,11 @@ fn parallel_insertion(
             } else {
                 best_insertions.pop();
             }
-            
+
             // Insert customer
             let node_index = solution.insert(customer, demand, best.predecessor, best.successor);
             let route_index = best.route_index;
-            
+
             if best.predecessor == 0 {
                 context.set_head(route_index, node_index);
             }
@@ -287,7 +307,7 @@ fn parallel_insertion(
         } else {
             // No valid insertion found, add new route
             let position = add_route(candidate_list, random, solution, context);
-            
+
             // Keep best_insertions in sync with candidate_list (swap-remove)
             let last_idx = best_insertions.len() - 1;
             if position != last_idx {
@@ -299,12 +319,18 @@ fn parallel_insertion(
             } else {
                 best_insertions.pop();
             }
-            
+
             // Add new route insertions for remaining candidates
             let new_route_index = context.num_routes() - 1;
             for (i, &(customer, _demand)) in candidate_list.iter().enumerate() {
                 let (pred, succ, delta) = find_best_insertion(
-                    instance, solution, context, new_route_index, customer, criterion, random,
+                    instance,
+                    solution,
+                    context,
+                    new_route_index,
+                    customer,
+                    criterion,
+                    random,
                 );
                 best_insertions[i].push(InsertionInfo {
                     predecessor: pred,
@@ -330,9 +356,23 @@ fn insert_candidates(
 ) {
     let strategy = random.next_int(0, 1);
     if strategy == 0 {
-        sequential_insertion(instance, criterion, candidate_list, random, solution, context);
+        sequential_insertion(
+            instance,
+            criterion,
+            candidate_list,
+            random,
+            solution,
+            context,
+        );
     } else {
-        parallel_insertion(instance, criterion, candidate_list, random, solution, context);
+        parallel_insertion(
+            instance,
+            criterion,
+            candidate_list,
+            random,
+            solution,
+            context,
+        );
     }
 }
 
@@ -377,7 +417,14 @@ pub fn construct(instance: &Instance, random: &mut Random) -> AlkaidSolution {
         Criterion::Nfic
     };
 
-    insert_candidates(instance, criterion, &mut candidate_list, random, &mut solution, &mut context);
+    insert_candidates(
+        instance,
+        criterion,
+        &mut candidate_list,
+        random,
+        &mut solution,
+        &mut context,
+    );
 
     solution
 }

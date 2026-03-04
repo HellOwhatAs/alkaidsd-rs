@@ -172,8 +172,12 @@ mod tests {
         fn remove_route(&mut self, _: Node) {}
         fn move_route(&mut self, _: Node, _: Node) {}
         fn save(&mut self, _: &AlkaidSolution, _: &RouteContext) {}
-        fn as_any(&self) -> &dyn Any { self }
-        fn as_any_mut(&mut self) -> &mut dyn Any { self }
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
     }
 
     #[test]

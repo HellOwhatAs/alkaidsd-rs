@@ -92,7 +92,8 @@ impl Instance {
     #[inline]
     pub fn distance(&self, from: Node, to: Node) -> i32 {
         unsafe {
-            *self.distance_matrix
+            *self
+                .distance_matrix
                 .get_unchecked(from as usize)
                 .get_unchecked(to as usize)
         }

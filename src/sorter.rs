@@ -90,9 +90,7 @@ pub struct SortByDemand;
 
 impl SortOperator for SortByDemand {
     fn sort(&self, instance: &Instance, customers: &mut [Node], _random: &mut Random) {
-        customers.sort_by(|&a, &b| {
-            instance.demands[b as usize].cmp(&instance.demands[a as usize])
-        });
+        customers.sort_by(|&a, &b| instance.demands[b as usize].cmp(&instance.demands[a as usize]));
     }
 }
 

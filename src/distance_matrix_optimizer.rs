@@ -36,7 +36,8 @@ impl DistanceMatrixOptimizer {
     pub fn new(distance_matrix: &mut [Vec<i32>]) -> Self {
         let num_customers = distance_matrix.len() as Node;
         let original = distance_matrix.to_owned();
-        let mut previous_node_indices = vec![vec![0 as Node; num_customers as usize]; num_customers as usize];
+        let mut previous_node_indices =
+            vec![vec![0 as Node; num_customers as usize]; num_customers as usize];
 
         // Floyd-Warshall algorithm
         for k in 1..num_customers {
@@ -61,7 +62,8 @@ impl DistanceMatrixOptimizer {
 
     /// Recursively restores intermediate nodes between two positions.
     fn restore_path(&self, solution: &mut AlkaidSolution, i: Node, j: Node) {
-        let customer = self.previous_node_indices[solution.customer(i) as usize][solution.customer(j) as usize];
+        let customer = self.previous_node_indices[solution.customer(i) as usize]
+            [solution.customer(j) as usize];
 
         if customer != 0 {
             let k = solution.insert(customer, 0, i, j);
@@ -112,28 +114,20 @@ mod tests {
     #[test]
     fn test_floyd_warshall_basic() {
         // Triangle: 0 -> 1 -> 2, but 0 -> 2 is longer
-        let mut distance_matrix = vec![
-            vec![0, 1, 10],
-            vec![1, 0, 1],
-            vec![10, 1, 0],
-        ];
+        let mut distance_matrix = vec![vec![0, 1, 10], vec![1, 0, 1], vec![10, 1, 0]];
 
         let optimizer = DistanceMatrixOptimizer::new(&mut distance_matrix);
 
         // 0 -> 2 should now be 2 (via 1)
         assert_eq!(distance_matrix[0][2], 2);
-        
+
         // Intermediate node should be 1
         assert_eq!(optimizer.previous_node_indices[0][2], 1);
     }
 
     #[test]
     fn test_restore() {
-        let mut distance_matrix = vec![
-            vec![0, 1, 10],
-            vec![1, 0, 1],
-            vec![10, 1, 0],
-        ];
+        let mut distance_matrix = vec![vec![0, 1, 10], vec![1, 0, 1], vec![10, 1, 0]];
 
         let optimizer = DistanceMatrixOptimizer::new(&mut distance_matrix);
 

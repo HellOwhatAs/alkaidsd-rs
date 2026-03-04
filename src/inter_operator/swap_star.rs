@@ -89,11 +89,28 @@ impl SwapStar {
                     let successor_y_orig = solution.successor(node_y);
 
                     // Calculate removal costs
-                    let delta = -calc_delta(instance, solution, node_x, predecessor_x_orig, successor_x_orig)
-                        - calc_delta(instance, solution, node_y, predecessor_y_orig, successor_y_orig);
+                    let delta = -calc_delta(
+                        instance,
+                        solution,
+                        node_x,
+                        predecessor_x_orig,
+                        successor_x_orig,
+                    ) - calc_delta(
+                        instance,
+                        solution,
+                        node_y,
+                        predecessor_y_orig,
+                        successor_y_orig,
+                    );
 
                     // Default: insert at each other's original positions
-                    let mut delta_x = calc_delta(instance, solution, node_x, predecessor_y_orig, successor_y_orig);
+                    let mut delta_x = calc_delta(
+                        instance,
+                        solution,
+                        node_x,
+                        predecessor_y_orig,
+                        successor_y_orig,
+                    );
                     let mut predecessor_y = predecessor_y_orig;
                     let mut successor_y = successor_y_orig;
 
@@ -106,7 +123,13 @@ impl SwapStar {
                         }
                     }
 
-                    let mut delta_y = calc_delta(instance, solution, node_y, predecessor_x_orig, successor_x_orig);
+                    let mut delta_y = calc_delta(
+                        instance,
+                        solution,
+                        node_y,
+                        predecessor_x_orig,
+                        successor_x_orig,
+                    );
                     let mut predecessor_x = predecessor_x_orig;
                     let mut successor_x = successor_x_orig;
 
@@ -152,8 +175,8 @@ impl InterOperator for SwapStar {
         random: &mut Random,
         cache_map: &mut CacheMap,
     ) -> Vec<Node> {
-        let (caches, star_caches) = cache_map
-            .get2_mut::<InterRouteCache<SwapStarMove>, StarCaches>(solution, context);
+        let (caches, star_caches) =
+            cache_map.get2_mut::<InterRouteCache<SwapStarMove>, StarCaches>(solution, context);
         let mut best_move = SwapStarMove::default();
         let mut best_delta = Delta::default();
 
@@ -164,7 +187,14 @@ impl InterOperator for SwapStar {
                     star_caches.preprocess(instance, solution, context, route_x, random);
                     star_caches.preprocess(instance, solution, context, route_y, random);
                     Self::swap_star_inner(
-                        instance, solution, context, route_x, route_y, cache, star_caches, random,
+                        instance,
+                        solution,
+                        context,
+                        route_x,
+                        route_y,
+                        cache,
+                        star_caches,
+                        random,
                     );
                 } else {
                     cache.mv.route_x = route_x;

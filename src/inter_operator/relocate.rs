@@ -64,13 +64,15 @@ impl Relocate {
             // Check capacity constraint
             if context.load(route_y) + solution.load(node_x) <= instance.capacity {
                 // Use star cache to find best insertion position
-                let insertion = star_caches.get(route_y, solution.customer(node_x)).find_best();
+                let insertion = star_caches
+                    .get(route_y, solution.customer(node_x))
+                    .find_best();
                 let predecessor_x = solution.predecessor(node_x);
                 let successor_x = solution.successor(node_x);
-                    
+
                 let delta = insertion.delta.value
                     - calc_delta(instance, solution, node_x, predecessor_x, successor_x);
-                    
+
                 if cache.delta.update(delta, random) {
                     cache.mv = RelocateMove {
                         route_x,
@@ -95,8 +97,8 @@ impl InterOperator for Relocate {
         random: &mut Random,
         cache_map: &mut CacheMap,
     ) -> Vec<Node> {
-        let (caches, star_caches) = cache_map
-            .get2_mut::<InterRouteCache<RelocateMove>, StarCaches>(solution, context);
+        let (caches, star_caches) =
+            cache_map.get2_mut::<InterRouteCache<RelocateMove>, StarCaches>(solution, context);
         let mut best_move = RelocateMove::default();
         let mut best_delta = Delta::default();
 
@@ -109,7 +111,14 @@ impl InterOperator for Relocate {
                 if !cache.try_reuse() {
                     star_caches.preprocess(instance, solution, context, route_y, random);
                     Self::relocate_inner(
-                        instance, solution, context, route_x, route_y, cache, star_caches, random,
+                        instance,
+                        solution,
+                        context,
+                        route_x,
+                        route_y,
+                        cache,
+                        star_caches,
+                        random,
                     );
                 } else {
                     cache.mv.route_x = route_x;

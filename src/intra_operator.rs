@@ -124,8 +124,13 @@ impl IntraOperator for Exchange {
                 node_b = solution.successor(node_b);
                 while node_b != 0 {
                     Self::evaluate_inner(
-                        instance, solution, node_a, node_b,
-                        &mut best_move, &mut best_delta, random,
+                        instance,
+                        solution,
+                        node_a,
+                        node_b,
+                        &mut best_move,
+                        &mut best_delta,
+                        random,
                     );
                     node_b = solution.successor(node_b);
                 }
@@ -177,20 +182,25 @@ impl<const NUM: usize> OrOpt<NUM> {
         let predecessor_head = solution.predecessor(head);
         let successor_tail = solution.successor(tail);
 
-        let mut delta = instance.distance(solution.customer(predecessor_head), solution.customer(successor_tail))
-            - instance.distance(solution.customer(predecessor_head), solution.customer(head))
+        let mut delta = instance.distance(
+            solution.customer(predecessor_head),
+            solution.customer(successor_tail),
+        ) - instance
+            .distance(solution.customer(predecessor_head), solution.customer(head))
             - instance.distance(solution.customer(tail), solution.customer(successor_tail))
             - instance.distance(solution.customer(predecessor), solution.customer(successor));
 
         let mut reversed = false;
 
-        let insertion_delta = instance.distance(solution.customer(predecessor), solution.customer(head))
+        let insertion_delta = instance
+            .distance(solution.customer(predecessor), solution.customer(head))
             + instance.distance(solution.customer(successor), solution.customer(tail));
 
         let mut best_insertion_delta = insertion_delta;
 
         if NUM > 1 {
-            let reversed_delta = instance.distance(solution.customer(predecessor), solution.customer(tail))
+            let reversed_delta = instance
+                .distance(solution.customer(predecessor), solution.customer(tail))
                 + instance.distance(solution.customer(successor), solution.customer(head));
 
             if reversed_delta < insertion_delta {
@@ -270,9 +280,15 @@ impl<const NUM: usize> IntraOperator for OrOpt<NUM> {
             while predecessor != 0 {
                 let successor = solution.successor(predecessor);
                 Self::evaluate_inner(
-                    instance, solution, head, tail,
-                    predecessor, successor,
-                    &mut best_move, &mut best_delta, random,
+                    instance,
+                    solution,
+                    head,
+                    tail,
+                    predecessor,
+                    successor,
+                    &mut best_move,
+                    &mut best_delta,
+                    random,
                 );
                 predecessor = successor;
             }
@@ -282,9 +298,15 @@ impl<const NUM: usize> IntraOperator for OrOpt<NUM> {
             while successor != 0 {
                 let predecessor = solution.predecessor(successor);
                 Self::evaluate_inner(
-                    instance, solution, head, tail,
-                    predecessor, successor,
-                    &mut best_move, &mut best_delta, random,
+                    instance,
+                    solution,
+                    head,
+                    tail,
+                    predecessor,
+                    successor,
+                    &mut best_move,
+                    &mut best_delta,
+                    random,
                 );
                 successor = predecessor;
             }

@@ -108,7 +108,9 @@ impl Random {
     /// Scramble function for seed initialization.
     #[inline]
     fn scramble(n: u64, multiple: u64, shift: u32, add: u32) -> u64 {
-        multiple.wrapping_mul(n ^ (n >> shift)).wrapping_add(add as u64)
+        multiple
+            .wrapping_mul(n ^ (n >> shift))
+            .wrapping_add(add as u64)
     }
 
     /// Well-known scrambling function for seed initialization.

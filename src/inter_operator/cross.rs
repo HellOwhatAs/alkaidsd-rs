@@ -110,16 +110,22 @@ impl Cross {
                 let mut predecessor_load_y = context.pre_load(left_y);
                 let mut successor_load_y = context.load(route_y) - predecessor_load_y;
 
-                let base = -instance.distance(solution.customer(left_x), solution.customer(successor_x))
+                let base = -instance
+                    .distance(solution.customer(left_x), solution.customer(successor_x))
                     - instance.distance(solution.customer(left_y), solution.customer(successor_y));
 
                 for reversed in [false, true] {
                     if predecessor_load_x + successor_load_y <= instance.capacity
                         && successor_load_x + predecessor_load_y <= instance.capacity
                     {
-                        let delta = base
-                            + instance.distance(solution.customer(left_x), solution.customer(successor_y))
-                            + instance.distance(solution.customer(successor_x), solution.customer(predecessor_y));
+                        let delta =
+                            base + instance.distance(
+                                solution.customer(left_x),
+                                solution.customer(successor_y),
+                            ) + instance.distance(
+                                solution.customer(successor_x),
+                                solution.customer(predecessor_y),
+                            );
 
                         if cache.delta.update(delta, random) {
                             cache.mv = CrossMove {

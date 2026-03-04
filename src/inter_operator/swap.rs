@@ -82,10 +82,14 @@ impl<const NUM_X: usize, const NUM_Y: usize> Swap<NUM_X, NUM_Y> {
                 context.set_head(mv.route_x, successor);
             }
             Self::segment_insertion(
-                solution, context,
-                mv.left_x, mv.right_x,
-                mv.left_y, mv.right_y,
-                mv.route_y, mv.direction_x,
+                solution,
+                context,
+                mv.left_x,
+                mv.right_x,
+                mv.left_y,
+                mv.right_y,
+                mv.route_y,
+                mv.direction_x,
             );
         } else {
             // Full swap
@@ -95,16 +99,24 @@ impl<const NUM_X: usize, const NUM_Y: usize> Swap<NUM_X, NUM_Y> {
             let successor_y = solution.successor(mv.right_y);
 
             Self::segment_insertion(
-                solution, context,
-                mv.left_x, mv.right_x,
-                predecessor_y, successor_y,
-                mv.route_y, mv.direction_x,
+                solution,
+                context,
+                mv.left_x,
+                mv.right_x,
+                predecessor_y,
+                successor_y,
+                mv.route_y,
+                mv.direction_x,
             );
             Self::segment_insertion(
-                solution, context,
-                mv.left_y, mv.right_y,
-                predecessor_x, successor_x,
-                mv.route_x, mv.direction_y,
+                solution,
+                context,
+                mv.left_y,
+                mv.right_y,
+                predecessor_x,
+                successor_x,
+                mv.route_x,
+                mv.direction_y,
             );
         }
     }
@@ -243,10 +255,11 @@ impl<const NUM_X: usize, const NUM_Y: usize> Swap<NUM_X, NUM_Y> {
             );
 
             let base_x = if NUM_Y == 0 {
-                base_x + instance.distance(
-                    solution.customer(solution.predecessor(left_x)),
-                    solution.customer(solution.successor(right_x)),
-                )
+                base_x
+                    + instance.distance(
+                        solution.customer(solution.predecessor(left_x)),
+                        solution.customer(solution.successor(right_x)),
+                    )
             } else {
                 base_x
             };
@@ -259,11 +272,17 @@ impl<const NUM_X: usize, const NUM_Y: usize> Swap<NUM_X, NUM_Y> {
                     let mut successor = context.head(route_y);
                     loop {
                         Self::update_shift(
-                            instance, solution,
-                            route_x, route_y,
-                            left_x, right_x,
-                            predecessor, successor,
-                            base_x, cache, random,
+                            instance,
+                            solution,
+                            route_x,
+                            route_y,
+                            left_x,
+                            right_x,
+                            predecessor,
+                            successor,
+                            base_x,
+                            cache,
+                            random,
                         );
                         if successor == 0 {
                             break;
@@ -292,10 +311,7 @@ impl<const NUM_X: usize, const NUM_Y: usize> Swap<NUM_X, NUM_Y> {
                 while right_y != 0 {
                     if load_y >= load_y_lower && load_y <= load_y_upper {
                         Self::update_swap(
-                            instance, solution,
-                            route_x, route_y,
-                            left_x, right_x,
-                            left_y, right_y,
+                            instance, solution, route_x, route_y, left_x, right_x, left_y, right_y,
                             base_x, cache, random,
                         );
                     }

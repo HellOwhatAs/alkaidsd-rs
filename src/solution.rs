@@ -101,7 +101,11 @@ impl AlkaidSolution {
     /// The predecessor node index (0 = depot/start of route)
     #[inline]
     pub fn predecessor(&self, node_index: Node) -> Node {
-        unsafe { self.node_data.get_unchecked(node_index as usize).predecessor }
+        unsafe {
+            self.node_data
+                .get_unchecked(node_index as usize)
+                .predecessor
+        }
     }
 
     /// Returns the successor of the given node.
@@ -213,7 +217,13 @@ impl AlkaidSolution {
     ///
     /// The index of the newly created node
     #[inline]
-    pub fn insert(&mut self, customer: Node, load: i32, predecessor: Node, successor: Node) -> Node {
+    pub fn insert(
+        &mut self,
+        customer: Node,
+        load: i32,
+        predecessor: Node,
+        successor: Node,
+    ) -> Node {
         let node_index = self.new_node(customer, load);
         self.link(predecessor, node_index);
         self.link(node_index, successor);
@@ -405,11 +415,7 @@ mod tests {
             num_customers: 3,
             capacity: 100,
             demands: vec![0, 50, 30],
-            distance_matrix: vec![
-                vec![0, 10, 20],
-                vec![10, 0, 15],
-                vec![20, 15, 0],
-            ],
+            distance_matrix: vec![vec![0, 10, 20], vec![10, 0, 15], vec![20, 15, 0]],
         };
 
         let mut solution = AlkaidSolution::new();

@@ -36,7 +36,11 @@ pub struct SdSwapOneOne;
 
 impl SdSwapOneOne {
     /// Applies a SD swap(1,1) move.
-    fn do_sd_swap_one_one(mv: &SdSwapOneOneMove, solution: &mut AlkaidSolution, context: &mut RouteContext) {
+    fn do_sd_swap_one_one(
+        mv: &SdSwapOneOneMove,
+        solution: &mut AlkaidSolution,
+        context: &mut RouteContext,
+    ) {
         let predecessor_y = solution.predecessor(mv.node_y);
         let successor_y = solution.successor(mv.node_y);
 
@@ -121,13 +125,29 @@ impl SdSwapOneOne {
                 let load_y = solution.load(node_y);
                 if load_x > load_y {
                     Self::sd_swap_one_one_inner_eval(
-                        instance, solution, false, route_x, route_y,
-                        node_x, node_y, load_x - load_y, cache, random,
+                        instance,
+                        solution,
+                        false,
+                        route_x,
+                        route_y,
+                        node_x,
+                        node_y,
+                        load_x - load_y,
+                        cache,
+                        random,
                     );
                 } else if load_y > load_x {
                     Self::sd_swap_one_one_inner_eval(
-                        instance, solution, true, route_y, route_x,
-                        node_y, node_x, load_y - load_x, cache, random,
+                        instance,
+                        solution,
+                        true,
+                        route_y,
+                        route_x,
+                        node_y,
+                        node_x,
+                        load_y - load_x,
+                        cache,
+                        random,
                     );
                 }
                 node_y = solution.successor(node_y);
