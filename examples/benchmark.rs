@@ -353,10 +353,7 @@ fn build_intra_operators(names: &[String]) -> Vec<Box<dyn IntraOperator>> {
     ops
 }
 
-fn build_acceptance_rule(
-    rule_type: &str,
-    args: &[String],
-) -> Box<dyn Fn() -> Box<dyn AcceptanceRule>> {
+fn build_acceptance_rule(rule_type: &str, args: &[String]) -> Box<dyn AcceptanceRule> {
     let mut params: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
     for arg in args {
         if let Some((k, v)) = parse_key_value(arg) {
@@ -367,15 +364,15 @@ fn build_acceptance_rule(
     match rule_type {
         "LAHC" => {
             let length = params.get("length").copied().unwrap_or(83.0) as usize;
-            Box::new(move || Box::new(LateAcceptanceHillClimbing::new(length)))
+            Box::new(LateAcceptanceHillClimbing::new(length))
         }
         "SA" => {
             let initial_temp = params.get("initial_temperature").copied().unwrap_or(1000.0);
             let decay = params.get("decay").copied().unwrap_or(0.99);
-            Box::new(move || Box::new(SimulatedAnnealing::new(initial_temp, decay)))
+            Box::new(SimulatedAnnealing::new(initial_temp, decay))
         }
-        "HCWE" => Box::new(|| Box::new(HillClimbingWithEqual)),
-        _ => Box::new(|| Box::new(HillClimbing)),
+        "HCWE" => Box::new(HillClimbingWithEqual),
+        _ => Box::new(HillClimbing),
     }
 }
 
@@ -483,7 +480,7 @@ fn main() {
     let mut config = AlkaidConfig {
         random_seed: args.random_seed,
         max_stagnation: 5000,
-        time_limit: args.time_limit,
+        time_limit: 60., //args.time_limit,
         blink_rate: args.blink_rate,
         inter_operators: build_inter_operators(&args.inter_operators),
         intra_operators: build_intra_operators(&args.intra_operators),

@@ -69,7 +69,7 @@ pub struct AlkaidConfig {
     pub intra_operators: Vec<Box<dyn IntraOperator>>,
 
     /// Factory function for acceptance rules
-    pub acceptance_rule: Box<dyn Fn() -> Box<dyn AcceptanceRule>>,
+    pub acceptance_rule: Box<dyn AcceptanceRule>,
 
     /// Ruin method for perturbation
     pub ruin_method: Box<dyn RuinMethod>,
@@ -275,7 +275,6 @@ impl AlkaidSolver {
             let mut objective = solution.calc_objective(instance);
             let mut iter_best_objective = objective;
             let mut new_solution = solution.clone();
-            let mut acceptance_rule = (config.acceptance_rule)();
             let mut num_stagnation = 0;
 
             while num_stagnation < max_stagnation
@@ -324,7 +323,10 @@ impl AlkaidSolver {
                 }
 
                 // Accept or reject
-                if acceptance_rule.accept(objective, new_objective, &mut random) {
+                if config
+                    .acceptance_rule
+                    .accept(objective, new_objective, &mut random)
+                {
                     objective = new_objective;
                     solution = new_solution.clone();
                 } else {
@@ -380,7 +382,7 @@ mod tests {
             blink_rate: 0.01,
             inter_operators: vec![Box::new(SwapStar)],
             intra_operators: vec![Box::new(Exchange)],
-            acceptance_rule: Box::new(|| Box::new(HillClimbing)),
+            acceptance_rule: Box::new(HillClimbing),
             ruin_method: Box::new(RandomRuin::new(vec![1])),
             sorter,
             listener: None,
