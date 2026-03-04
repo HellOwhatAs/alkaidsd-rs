@@ -450,6 +450,11 @@ impl AlkaidSolution {
     }
 
     /// Returns all route head nodes (nodes whose predecessor is the depot).
+    ///
+    /// This scans all nodes in the solution and is intended for convenience use
+    /// (e.g., output formatting). For performance-critical code, use
+    /// [`RouteContext`](crate::route_context::RouteContext) which tracks route
+    /// heads incrementally.
     pub fn route_heads(&self) -> Vec<Node> {
         self.node_indices()
             .iter()
