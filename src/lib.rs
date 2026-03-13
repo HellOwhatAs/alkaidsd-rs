@@ -32,6 +32,7 @@ pub mod repair;
 pub mod route_context;
 pub mod ruin_method;
 pub mod solution;
+pub mod solution2;
 pub mod solver;
 pub mod sorter;
 pub mod split_reinsertion;
