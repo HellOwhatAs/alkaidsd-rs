@@ -165,41 +165,42 @@ impl<'a, T> Iterator for RouteIter<'a, T> {
 
 #[derive(Debug, Clone)]
 pub struct Route<'a, T> {
-    data: &'a LinkedList<T>,
-    head: usize,
-    tail: usize,
+    context: &'a RouteContext<T>,
+    index: usize,
 }
 
 impl<'a, T> Route<'a, T> {
     pub fn iter(&self) -> RouteIter<'a, T> {
         RouteIter {
-            data: self.data,
-            cur: self.head,
+            data: &self.context.data,
+            cur: unsafe { self.context.routes.get_unchecked(self.index) }.0,
         }
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RouteContext<T> {
     data: LinkedList<T>,
     routes: Vec<(usize, usize)>,
 }
 
 impl<T> RouteContext<T> {
-    pub fn at(&self, route_index: usize) -> Route<'_, T> {
-        debug_assert!(route_index < self.len());
-        let &(head, tail) = unsafe { self.routes.get_unchecked(route_index) };
-        Route {
-            data: &self.data,
-            head,
-            tail,
-        }
+    pub fn iter(&self) -> impl Iterator<Item = Route<'_, T>> + Clone + ExactSizeIterator {
+        (0..self.routes.len()).map(|index| Route {
+            context: self,
+            index,
+        })
     }
 
     pub fn from_linkedlist(data: LinkedList<T>) -> Self {
         let mut routes = Vec::new();
         for &node in data.nodes() {
             if data.predecessor(node) == 0 {
-                routes.push((node, 0));
+                let mut tail = node;
+                while data.successor(tail) != 0 {
+                    tail = data.successor(tail);
+                }
+                routes.push((node, tail));
             }
         }
         Self { data, routes }
@@ -222,8 +223,18 @@ impl<T> RouteContext<T> {
     }
 
     pub fn probe(&self) {}
+}
 
-    pub fn len(&self) -> usize {
-        self.routes.len()
+#[test]
+fn test() {
+    use itertools::Itertools;
+
+    let mut llist = LinkedList::<usize>::default();
+    llist.insert(10, 0, 0);
+    llist.insert(11, 0, 0);
+    let ctx = RouteContext::from_linkedlist(llist);
+
+    for (x, y) in ctx.iter().tuple_combinations() {
+        println!("{:?}\n{:?}\n", x, y);
     }
 }
