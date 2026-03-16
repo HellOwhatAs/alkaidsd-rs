@@ -1,3 +1,7 @@
+use crate::Instance;
+use itertools::Itertools;
+use std::mem::swap;
+
 #[derive(Debug, Clone, Default)]
 struct NodeData<T> {
     succ: usize,
@@ -34,12 +38,10 @@ impl<T: Default> LinkedList<T> {
 
 impl<T> LinkedList<T> {
     pub fn data(&self, node: usize) -> &T {
-        debug_assert!(node < self.node_data.len());
         unsafe { &self.node_data.get_unchecked(node).data }
     }
 
     pub fn data_mut(&mut self, node: usize) -> &mut T {
-        debug_assert!(node < self.node_data.len());
         unsafe { &mut self.node_data.get_unchecked_mut(node).data }
     }
 
@@ -71,22 +73,18 @@ impl<T> LinkedList<T> {
     }
 
     pub fn predecessor(&self, node: usize) -> usize {
-        debug_assert!(node < self.node_data.len());
         unsafe { self.node_data.get_unchecked(node).pred }
     }
 
     pub fn successor(&self, node: usize) -> usize {
-        debug_assert!(node < self.node_data.len());
         unsafe { self.node_data.get_unchecked(node).succ }
     }
 
     pub fn set_predecessor(&mut self, node: usize, predecessor: usize) {
-        debug_assert!(node < self.node_data.len());
         unsafe { self.node_data.get_unchecked_mut(node).pred = predecessor };
     }
 
     pub fn set_successor(&mut self, node: usize, successor: usize) {
-        debug_assert!(node < self.node_data.len());
         unsafe { self.node_data.get_unchecked_mut(node).succ = successor };
     }
 
@@ -96,7 +94,6 @@ impl<T> LinkedList<T> {
     }
 
     pub fn remove(&mut self, node: usize) {
-        debug_assert!(node != 0);
         let predecessor = self.predecessor(node);
         let successor = self.successor(node);
         self.link(predecessor, successor);
@@ -145,12 +142,12 @@ impl<T> LinkedList<T> {
     }
 }
 
-pub struct RouteIter<'a, T> {
+pub struct RouteNodeIter<'a, T> {
     data: &'a LinkedList<T>,
     cur: usize,
 }
 
-impl<'a, T> Iterator for RouteIter<'a, T> {
+impl<'a, T> Iterator for RouteNodeIter<'a, T> {
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
         let res = self.cur;
@@ -163,6 +160,34 @@ impl<'a, T> Iterator for RouteIter<'a, T> {
     }
 }
 
+pub struct RouteEdgeIter<'a, T> {
+    data: &'a LinkedList<T>,
+    cur: Option<(usize, usize)>,
+}
+
+impl<'a, T> Iterator for RouteEdgeIter<'a, T> {
+    type Item = (usize, usize);
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((a, b)) = self.cur {
+            self.cur = (b != 0).then(|| (b, self.data.successor(b)));
+            Some((a, b))
+        } else {
+            self.cur
+        }
+    }
+}
+
+impl<'a, T> DoubleEndedIterator for RouteEdgeIter<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if let Some((a, b)) = self.cur {
+            self.cur = (a != 0).then(|| (self.data.predecessor(a), a));
+            Some((a, b))
+        } else {
+            self.cur
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Route<'a, T> {
     context: &'a RouteContext<T>,
@@ -170,21 +195,104 @@ pub struct Route<'a, T> {
 }
 
 impl<'a, T> Route<'a, T> {
-    pub fn iter(&self) -> RouteIter<'a, T> {
-        RouteIter {
+    pub fn iter_nodes(&self) -> RouteNodeIter<'a, T> {
+        RouteNodeIter {
             data: &self.context.data,
             cur: unsafe { self.context.routes.get_unchecked(self.index) }.0,
+        }
+    }
+
+    pub fn iter_edges(&self) -> RouteEdgeIter<'a, T> {
+        let head = unsafe { self.context.routes.get_unchecked(self.index) }.0;
+        RouteEdgeIter {
+            data: &self.context.data,
+            cur: Some((0, head)),
         }
     }
 }
 
 #[derive(Debug, Clone)]
+pub struct RouteSplitLeft<T> {
+    route: T,
+    tail: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct RouteSplitRight<T> {
+    route: T,
+    head: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct RouteJoin<T1, T2> {
+    left: T1,
+    right: T2,
+}
+
+#[derive(Debug, Clone)]
+pub struct RouteReverse<T> {
+    route: T,
+}
+
+pub trait RouteLike: Sized + Clone {
+    fn head(&self) -> usize;
+    fn tail(&self) -> usize;
+}
+
+impl<'a, T: Clone> RouteLike for Route<'a, T> {
+    fn head(&self) -> usize {
+        unsafe { self.context.routes.get_unchecked(self.index) }.0
+    }
+
+    fn tail(&self) -> usize {
+        unsafe { self.context.routes.get_unchecked(self.index) }.1
+    }
+}
+impl<T: RouteLike> RouteLike for RouteSplitLeft<T> {
+    fn head(&self) -> usize {
+        self.route.head()
+    }
+
+    fn tail(&self) -> usize {
+        self.tail
+    }
+}
+impl<T: RouteLike> RouteLike for RouteSplitRight<T> {
+    fn head(&self) -> usize {
+        self.head
+    }
+
+    fn tail(&self) -> usize {
+        self.route.tail()
+    }
+}
+impl<T1: RouteLike, T2: RouteLike> RouteLike for RouteJoin<T1, T2> {
+    fn head(&self) -> usize {
+        self.left.head()
+    }
+
+    fn tail(&self) -> usize {
+        self.right.tail()
+    }
+}
+impl<T: RouteLike> RouteLike for RouteReverse<T> {
+    fn head(&self) -> usize {
+        self.tail()
+    }
+
+    fn tail(&self) -> usize {
+        self.head()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct RouteContext<T> {
-    data: LinkedList<T>,
+    pub data: LinkedList<T>,
+    pub instance: Instance,
     routes: Vec<(usize, usize)>,
 }
 
-impl<T> RouteContext<T> {
+impl<T: Clone> RouteContext<T> {
     pub fn iter(&self) -> impl Iterator<Item = Route<'_, T>> + Clone + ExactSizeIterator {
         (0..self.routes.len()).map(|index| Route {
             context: self,
@@ -192,7 +300,7 @@ impl<T> RouteContext<T> {
         })
     }
 
-    pub fn from_linkedlist(data: LinkedList<T>) -> Self {
+    pub fn new(data: LinkedList<T>, instance: Instance) -> Self {
         let mut routes = Vec::new();
         for &node in data.nodes() {
             if data.predecessor(node) == 0 {
@@ -203,38 +311,113 @@ impl<T> RouteContext<T> {
                 routes.push((node, tail));
             }
         }
-        Self { data, routes }
+        Self {
+            data,
+            instance,
+            routes,
+        }
     }
 
-    pub fn pred(&self, node: usize) -> Option<usize> {
-        self.data
-            .node_data
-            .get(node)
-            .map(|x| x.pred)
-            .filter(|&x| x != 0)
+    pub fn probe<F, const N: usize>(&self, func: F) -> (i32, Vec<(usize, usize)>)
+    where
+        F: Fn(&mut RouteEditContext<'_, T>, [Route<'_, T>; N]),
+    {
+        let mut best_delta = 0;
+        let (mut actions, mut best_actions) = (Vec::new(), Vec::new());
+        for routes in self.iter().array_combinations() {
+            actions.clear();
+            let mut ctx = RouteEditContext {
+                context: self,
+                actions: &mut actions,
+                delta: routes
+                    .iter()
+                    .map(|r| {
+                        -self.instance.distance(0, r.head() as i16)
+                            - self.instance.distance(r.tail() as i16, 0)
+                    })
+                    .sum(),
+            };
+            func(&mut ctx, routes);
+            if ctx.delta < best_delta {
+                best_delta = ctx.delta;
+                swap(&mut actions, &mut best_actions);
+            }
+        }
+        (best_delta, best_actions)
+    }
+}
+
+#[derive(Debug)]
+pub struct RouteEditContext<'a, T> {
+    context: &'a RouteContext<T>,
+    actions: &'a mut Vec<(usize, usize)>,
+    delta: i32,
+}
+
+impl<'a, T> RouteEditContext<'a, T> {
+    pub fn split_at<T1: RouteLike>(
+        &mut self,
+        route: T1,
+        edge: (usize, usize),
+    ) -> (RouteSplitLeft<T1>, RouteSplitRight<T1>) {
+        self.delta -= self.context.instance.distance(edge.0 as i16, edge.1 as i16);
+        (
+            RouteSplitLeft {
+                route: route.clone(),
+                tail: edge.0,
+            },
+            RouteSplitRight {
+                route: route,
+                head: edge.1,
+            },
+        )
     }
 
-    pub fn succ(&self, node: usize) -> Option<usize> {
-        self.data
-            .node_data
-            .get(node)
-            .map(|x| x.succ)
-            .filter(|&x| x != 0)
+    pub fn join<T1: RouteLike, T2: RouteLike>(
+        &mut self,
+        route1: T1,
+        route2: T2,
+    ) -> RouteJoin<T1, T2> {
+        let (a, b) = (route1.tail(), route2.head());
+        self.delta += self.context.instance.distance(a as i16, b as i16);
+        self.actions.push((a, b));
+        RouteJoin {
+            left: route1,
+            right: route2,
+        }
     }
 
-    pub fn probe(&self) {}
+    pub fn rev<T1: RouteLike>(&mut self, route: T1) -> RouteReverse<T1> {
+        RouteReverse { route: route }
+    }
+
+    pub fn submit<T1: RouteLike>(&mut self, route: T1) {
+        let (a, b) = (route.head(), route.tail());
+        self.delta += self.context.instance.distance(0, a as i16)
+            + self.context.instance.distance(b as i16, 0);
+        self.actions.extend([(0, a), (b, 0)]);
+    }
 }
 
 #[test]
 fn test() {
-    use itertools::Itertools;
-
     let mut llist = LinkedList::<usize>::default();
     llist.insert(10, 0, 0);
     llist.insert(11, 0, 0);
-    let ctx = RouteContext::from_linkedlist(llist);
+    let ctx = RouteContext::new(llist, Instance::new(10, 10, vec![10], vec![vec![10]]));
 
-    for (x, y) in ctx.iter().tuple_combinations() {
-        println!("{:?}\n{:?}\n", x, y);
+    fn func<T: Clone>(op: &mut RouteEditContext<'_, T>, rs: [Route<'_, T>; 2]) {
+        for e1 in rs[0].iter_edges() {
+            for e2 in rs[1].iter_edges() {
+                let (r11, r12) = op.split_at(rs[0].clone(), e1);
+                let (r21, r22) = op.split_at(rs[0].clone(), e2);
+                let j1 = op.join(r11, r22);
+                let j2 = op.join(r21, r12);
+                op.submit(j1);
+                op.submit(j2);
+            }
+        }
     }
+
+    ctx.probe(func);
 }

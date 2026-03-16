@@ -10,5 +10,5 @@ license = "MIT"
 lto = true
 codegen-units = 1
 
-[dev-dependencies]
+[dependencies]
 itertools = "0.14.0"
