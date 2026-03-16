@@ -140,6 +140,20 @@ impl<T> LinkedList<T> {
         }
         self.link(left, successor);
     }
+
+    pub fn apply_actions(&mut self, actions: impl IntoIterator<Item = Action>) {
+        for action in actions {
+            match action {
+                Action::ReverseSegment { left, right } => {
+                    let (old_pred, old_succ) = (self.predecessor(left), self.successor(right));
+                    self.reversed_link(left, right, old_pred, old_succ);
+                }
+                Action::Link { pred, succ } => {
+                    self.link(pred, succ);
+                }
+            }
+        }
+    }
 }
 
 pub struct RouteNodeIter<'a, T> {
@@ -188,6 +202,7 @@ impl<'a, T> DoubleEndedIterator for RouteEdgeIter<'a, T> {
     }
 }
 
+#[must_use]
 #[derive(Debug, Clone)]
 pub struct Route<'a, T> {
     context: &'a RouteContext<T>,
@@ -211,24 +226,29 @@ impl<'a, T> Route<'a, T> {
     }
 }
 
+#[must_use]
 #[derive(Debug, Clone)]
 pub struct RouteSplitLeft<T> {
     route: T,
     tail: usize,
+    other_head: usize,
 }
 
+#[must_use]
 #[derive(Debug, Clone)]
 pub struct RouteSplitRight<T> {
     route: T,
     head: usize,
 }
 
+#[must_use]
 #[derive(Debug, Clone)]
 pub struct RouteJoin<T1, T2> {
     left: T1,
     right: T2,
 }
 
+#[must_use]
 #[derive(Debug, Clone)]
 pub struct RouteReverse<T> {
     route: T,
@@ -237,6 +257,32 @@ pub struct RouteReverse<T> {
 pub trait RouteLike: Sized + Clone {
     fn head(&self) -> usize;
     fn tail(&self) -> usize;
+
+    fn execute<T>(&self, op: &mut RouteEditContext<'_, T>);
+    fn split_at(self, edge: (usize, usize)) -> (RouteSplitLeft<Self>, RouteSplitRight<Self>) {
+        (
+            RouteSplitLeft {
+                route: self.clone(),
+                tail: edge.0,
+                other_head: edge.1,
+            },
+            RouteSplitRight {
+                route: self,
+                head: edge.1,
+            },
+        )
+    }
+
+    fn join<T: RouteLike>(self, other: T) -> RouteJoin<Self, T> {
+        RouteJoin {
+            left: self,
+            right: other,
+        }
+    }
+
+    fn rev(self) -> RouteReverse<Self> {
+        RouteReverse { route: self }
+    }
 }
 
 impl<'a, T: Clone> RouteLike for Route<'a, T> {
@@ -247,7 +293,10 @@ impl<'a, T: Clone> RouteLike for Route<'a, T> {
     fn tail(&self) -> usize {
         unsafe { self.context.routes.get_unchecked(self.index) }.1
     }
+
+    fn execute<T1>(&self, _op: &mut RouteEditContext<'_, T1>) {}
 }
+
 impl<T: RouteLike> RouteLike for RouteSplitLeft<T> {
     fn head(&self) -> usize {
         self.route.head()
@@ -256,7 +305,16 @@ impl<T: RouteLike> RouteLike for RouteSplitLeft<T> {
     fn tail(&self) -> usize {
         self.tail
     }
+
+    fn execute<T1>(&self, op: &mut RouteEditContext<'_, T1>) {
+        self.route.execute(op);
+        op.delta -= op
+            .context
+            .instance
+            .distance(self.tail as i16, self.other_head as i16);
+    }
 }
+
 impl<T: RouteLike> RouteLike for RouteSplitRight<T> {
     fn head(&self) -> usize {
         self.head
@@ -265,7 +323,10 @@ impl<T: RouteLike> RouteLike for RouteSplitRight<T> {
     fn tail(&self) -> usize {
         self.route.tail()
     }
+
+    fn execute<T1>(&self, _op: &mut RouteEditContext<'_, T1>) {}
 }
+
 impl<T1: RouteLike, T2: RouteLike> RouteLike for RouteJoin<T1, T2> {
     fn head(&self) -> usize {
         self.left.head()
@@ -274,14 +335,32 @@ impl<T1: RouteLike, T2: RouteLike> RouteLike for RouteJoin<T1, T2> {
     fn tail(&self) -> usize {
         self.right.tail()
     }
+
+    fn execute<T>(&self, op: &mut RouteEditContext<'_, T>) {
+        self.left.execute(op);
+        self.right.execute(op);
+
+        let (a, b) = (self.left.tail(), self.right.head());
+        op.actions.push(Action::link(a, b));
+        op.delta += op.context.instance.distance(a as i16, b as i16);
+    }
 }
+
 impl<T: RouteLike> RouteLike for RouteReverse<T> {
     fn head(&self) -> usize {
-        self.tail()
+        self.route.tail()
     }
 
     fn tail(&self) -> usize {
-        self.head()
+        self.route.head()
+    }
+
+    fn execute<T1>(&self, op: &mut RouteEditContext<'_, T1>) {
+        self.route.execute(op);
+        op.actions.push(Action::reverse_segment(
+            self.route.head(),
+            self.route.tail(),
+        ));
     }
 }
 
@@ -318,84 +397,94 @@ impl<T: Clone> RouteContext<T> {
         }
     }
 
-    pub fn probe<F, const N: usize>(&self, func: F) -> (i32, Vec<(usize, usize)>)
+    pub fn probe<F, const N: usize>(&self, func: F) -> Option<(i32, Vec<Action>)>
     where
-        F: Fn(&mut RouteEditContext<'_, T>, [Route<'_, T>; N]),
+        F: Fn(&mut RouteViewContext<'_, T, N>, [&Route<'_, T>; N]),
     {
         let mut best_delta = 0;
         let (mut actions, mut best_actions) = (Vec::new(), Vec::new());
         for routes in self.iter().array_combinations() {
             actions.clear();
-            let mut ctx = RouteEditContext {
+            let mut ctx = RouteViewContext {
                 context: self,
                 actions: &mut actions,
-                delta: routes
+                best_actions: &mut best_actions,
+                delta_init: routes
                     .iter()
                     .map(|r| {
                         -self.instance.distance(0, r.head() as i16)
                             - self.instance.distance(r.tail() as i16, 0)
                     })
                     .sum(),
+                best_delta: &mut best_delta,
+                routes: routes.clone(),
             };
-            func(&mut ctx, routes);
-            if ctx.delta < best_delta {
-                best_delta = ctx.delta;
-                swap(&mut actions, &mut best_actions);
-            }
+            func(&mut ctx, routes.each_ref());
         }
-        (best_delta, best_actions)
+        (best_delta < 0).then(|| (best_delta, best_actions))
+    }
+}
+
+#[derive(Debug)]
+pub struct RouteViewContext<'a, T, const N: usize> {
+    context: &'a RouteContext<T>,
+    actions: &'a mut Vec<Action>,
+    best_actions: &'a mut Vec<Action>,
+    delta_init: i32,
+    best_delta: &'a mut i32,
+    routes: [Route<'a, T>; N],
+}
+
+impl<'a, T: Clone, const N: usize> RouteViewContext<'a, T, N> {
+    pub fn simulate<F>(&mut self, func: F)
+    where
+        F: Fn(&mut RouteEditContext<'_, T>, [Route<'_, T>; N]),
+    {
+        self.actions.clear();
+        let mut ctx = RouteEditContext {
+            context: self.context,
+            actions: self.actions,
+            delta: self.delta_init,
+        };
+        func(&mut ctx, self.routes.clone());
+        if ctx.delta < *self.best_delta {
+            *self.best_delta = ctx.delta;
+            swap(self.best_actions, self.actions);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Action {
+    Link { pred: usize, succ: usize },
+    ReverseSegment { left: usize, right: usize },
+}
+
+impl Action {
+    pub fn link(pred: usize, succ: usize) -> Self {
+        Self::Link { pred, succ }
+    }
+
+    pub fn reverse_segment(left: usize, right: usize) -> Self {
+        Self::ReverseSegment { left, right }
     }
 }
 
 #[derive(Debug)]
 pub struct RouteEditContext<'a, T> {
     context: &'a RouteContext<T>,
-    actions: &'a mut Vec<(usize, usize)>,
+    actions: &'a mut Vec<Action>,
     delta: i32,
 }
 
 impl<'a, T> RouteEditContext<'a, T> {
-    pub fn split_at<T1: RouteLike>(
-        &mut self,
-        route: T1,
-        edge: (usize, usize),
-    ) -> (RouteSplitLeft<T1>, RouteSplitRight<T1>) {
-        self.delta -= self.context.instance.distance(edge.0 as i16, edge.1 as i16);
-        (
-            RouteSplitLeft {
-                route: route.clone(),
-                tail: edge.0,
-            },
-            RouteSplitRight {
-                route: route,
-                head: edge.1,
-            },
-        )
-    }
-
-    pub fn join<T1: RouteLike, T2: RouteLike>(
-        &mut self,
-        route1: T1,
-        route2: T2,
-    ) -> RouteJoin<T1, T2> {
-        let (a, b) = (route1.tail(), route2.head());
-        self.delta += self.context.instance.distance(a as i16, b as i16);
-        self.actions.push((a, b));
-        RouteJoin {
-            left: route1,
-            right: route2,
-        }
-    }
-
-    pub fn rev<T1: RouteLike>(&mut self, route: T1) -> RouteReverse<T1> {
-        RouteReverse { route: route }
-    }
-
     pub fn submit<T1: RouteLike>(&mut self, route: T1) {
+        route.execute(self);
         let (a, b) = (route.head(), route.tail());
         self.delta += self.context.instance.distance(0, a as i16)
             + self.context.instance.distance(b as i16, 0);
-        self.actions.extend([(0, a), (b, 0)]);
+        self.actions
+            .extend([Action::link(0, a), Action::link(b, 0)]);
     }
 }
 
@@ -406,18 +495,16 @@ fn test() {
     llist.insert(11, 0, 0);
     let ctx = RouteContext::new(llist, Instance::new(10, 10, vec![10], vec![vec![10]]));
 
-    fn func<T: Clone>(op: &mut RouteEditContext<'_, T>, rs: [Route<'_, T>; 2]) {
-        for e1 in rs[0].iter_edges() {
-            for e2 in rs[1].iter_edges() {
-                let (r11, r12) = op.split_at(rs[0].clone(), e1);
-                let (r21, r22) = op.split_at(rs[0].clone(), e2);
-                let j1 = op.join(r11, r22);
-                let j2 = op.join(r21, r12);
-                op.submit(j1);
-                op.submit(j2);
+    ctx.probe(|ctx, [route1, route2]| {
+        for e1 in route1.iter_edges() {
+            for e2 in route2.iter_edges() {
+                ctx.simulate(|op, [r1, r2]| {
+                    let (r11, r12) = r1.split_at(e1);
+                    let (r21, r22) = r2.split_at(e2);
+                    op.submit(r11.join(r22));
+                    op.submit(r21.join(r12));
+                });
             }
         }
-    }
-
-    ctx.probe(func);
+    });
 }
