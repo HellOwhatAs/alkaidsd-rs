@@ -191,17 +191,6 @@ impl<'a, T> Iterator for RouteEdgeIter<'a, T> {
     }
 }
 
-impl<'a, T> DoubleEndedIterator for RouteEdgeIter<'a, T> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if let Some((a, b)) = self.cur {
-            self.cur = (a != 0).then(|| (self.data.predecessor(a), a));
-            Some((a, b))
-        } else {
-            self.cur
-        }
-    }
-}
-
 #[must_use]
 #[derive(Debug, Clone)]
 pub struct Route<'a, T> {
@@ -258,7 +247,7 @@ pub trait RouteLike: Sized + Clone {
     fn head(&self) -> usize;
     fn tail(&self) -> usize;
 
-    fn execute<T>(&self, op: &mut RouteEditContext<'_, T>);
+    fn execute<T: HasPosition>(&self, op: &mut RouteEditContext<'_, T>);
     fn split_at(self, edge: (usize, usize)) -> (RouteSplitLeft<Self>, RouteSplitRight<Self>) {
         (
             RouteSplitLeft {
@@ -299,19 +288,23 @@ impl<'a, T: Clone> RouteLike for Route<'a, T> {
 
 impl<T: RouteLike> RouteLike for RouteSplitLeft<T> {
     fn head(&self) -> usize {
-        self.route.head()
+        if self.tail == 0 {
+            0
+        } else {
+            self.route.head()
+        }
     }
 
     fn tail(&self) -> usize {
         self.tail
     }
 
-    fn execute<T1>(&self, op: &mut RouteEditContext<'_, T1>) {
+    fn execute<T1: HasPosition>(&self, op: &mut RouteEditContext<'_, T1>) {
         self.route.execute(op);
-        op.delta -= op
-            .context
-            .instance
-            .distance(self.tail as i16, self.other_head as i16);
+        if self.tail != 0 && self.other_head != 0 {
+            let [a, b] = [self.tail, self.other_head].map(|x| op.context.data.data(x));
+            op.delta -= op.context.instance.distance(a.position(), b.position());
+        }
     }
 }
 
@@ -321,7 +314,11 @@ impl<T: RouteLike> RouteLike for RouteSplitRight<T> {
     }
 
     fn tail(&self) -> usize {
-        self.route.tail()
+        if self.head == 0 {
+            0
+        } else {
+            self.route.tail()
+        }
     }
 
     fn execute<T1>(&self, _op: &mut RouteEditContext<'_, T1>) {}
@@ -329,20 +326,36 @@ impl<T: RouteLike> RouteLike for RouteSplitRight<T> {
 
 impl<T1: RouteLike, T2: RouteLike> RouteLike for RouteJoin<T1, T2> {
     fn head(&self) -> usize {
-        self.left.head()
+        let h = self.left.head();
+        if h == 0 {
+            self.right.head()
+        } else {
+            h
+        }
     }
 
     fn tail(&self) -> usize {
-        self.right.tail()
+        let t = self.right.tail();
+        if t == 0 {
+            self.left.tail()
+        } else {
+            t
+        }
     }
 
-    fn execute<T>(&self, op: &mut RouteEditContext<'_, T>) {
+    fn execute<T: HasPosition>(&self, op: &mut RouteEditContext<'_, T>) {
         self.left.execute(op);
         self.right.execute(op);
 
         let (a, b) = (self.left.tail(), self.right.head());
-        op.actions.push(Action::link(a, b));
-        op.delta += op.context.instance.distance(a as i16, b as i16);
+        if a != 0 && b != 0 {
+            op.actions.push(Action::link(a, b));
+            let [apos, bpos] = [a, b].map(|x| op.context.data.data(x));
+            op.delta += op
+                .context
+                .instance
+                .distance(apos.position(), bpos.position());
+        }
     }
 }
 
@@ -355,13 +368,17 @@ impl<T: RouteLike> RouteLike for RouteReverse<T> {
         self.route.head()
     }
 
-    fn execute<T1>(&self, op: &mut RouteEditContext<'_, T1>) {
+    fn execute<T1: HasPosition>(&self, op: &mut RouteEditContext<'_, T1>) {
         self.route.execute(op);
         op.actions.push(Action::reverse_segment(
             self.route.head(),
             self.route.tail(),
         ));
     }
+}
+
+pub trait HasPosition {
+    fn position(&self) -> i16;
 }
 
 #[derive(Debug, Clone)]
@@ -371,7 +388,7 @@ pub struct RouteContext<T> {
     routes: Vec<(usize, usize)>,
 }
 
-impl<T: Clone> RouteContext<T> {
+impl<T: Clone + HasPosition> RouteContext<T> {
     pub fn iter(&self) -> impl Iterator<Item = Route<'_, T>> + Clone + ExactSizeIterator {
         (0..self.routes.len()).map(|index| Route {
             context: self,
@@ -397,33 +414,72 @@ impl<T: Clone> RouteContext<T> {
         }
     }
 
-    pub fn probe<F, const N: usize>(&self, func: F) -> Option<(i32, Vec<Action>)>
-    where
-        F: Fn(&mut RouteViewContext<'_, T, N>, [&Route<'_, T>; N]),
-    {
+    pub fn update(&mut self, best_move: Move) {
+        let Move {
+            delta: _,
+            actions,
+            used_routes,
+            new_routes,
+        } = best_move;
+        self.data.apply_actions(actions);
+
+        for i in 0..new_routes.len().max(used_routes.len()) {
+            match (new_routes.get(i), used_routes.get(i)) {
+                (Some(&new_route), Some(&j)) => unsafe {
+                    *self.routes.get_unchecked_mut(j) = new_route
+                },
+                (None, Some(&j)) => {
+                    // TODO: update cache since route (self.routes.len() - 1) is re-indexed to j.
+                    self.routes.swap_remove(j);
+                }
+                (Some(&new_route), None) => self.routes.push(new_route),
+                (None, None) => unreachable!(),
+            }
+        }
+    }
+
+    pub fn probe<const N: usize>(&self, func: ProbeFn<T, N>) -> Option<Move> {
         let mut best_delta = 0;
         let (mut actions, mut best_actions) = (Vec::new(), Vec::new());
+        let (mut used_routes, mut new_routes, mut best_new_routes) =
+            (Vec::new(), Vec::new(), Vec::new());
+        let route_delta_init = |r: &Route<T>| {
+            let [depot, head, tail] = [0, r.head(), r.tail()].map(|x| self.data.data(x).position());
+            -self.instance.distance(depot, head) - self.instance.distance(tail, depot)
+        };
         for routes in self.iter().array_combinations() {
             actions.clear();
             let mut ctx = RouteViewContext {
                 context: self,
                 actions: &mut actions,
                 best_actions: &mut best_actions,
-                delta_init: routes
-                    .iter()
-                    .map(|r| {
-                        -self.instance.distance(0, r.head() as i16)
-                            - self.instance.distance(r.tail() as i16, 0)
-                    })
-                    .sum(),
+                delta_init: routes.iter().map(route_delta_init).sum(),
                 best_delta: &mut best_delta,
                 routes: routes.clone(),
+                used_routes: &mut used_routes,
+                new_routes: &mut new_routes,
+                best_new_routes: &mut best_new_routes,
             };
             func(&mut ctx, routes.each_ref());
         }
-        (best_delta < 0).then(|| (best_delta, best_actions))
+        (best_delta < 0).then(|| Move {
+            delta: best_delta,
+            actions: best_actions,
+            used_routes,
+            new_routes: best_new_routes,
+        })
     }
 }
+
+#[derive(Debug)]
+pub struct Move {
+    pub delta: i32,
+    pub actions: Vec<Action>,
+    pub used_routes: Vec<usize>,
+    pub new_routes: Vec<(usize, usize)>,
+}
+
+pub type ProbeFn<T, const N: usize> = fn(&mut RouteViewContext<'_, T, N>, [&Route<'_, T>; N]);
 
 #[derive(Debug)]
 pub struct RouteViewContext<'a, T, const N: usize> {
@@ -433,23 +489,33 @@ pub struct RouteViewContext<'a, T, const N: usize> {
     delta_init: i32,
     best_delta: &'a mut i32,
     routes: [Route<'a, T>; N],
+    used_routes: &'a mut Vec<usize>,
+    new_routes: &'a mut Vec<(usize, usize)>,
+    best_new_routes: &'a mut Vec<(usize, usize)>,
 }
 
 impl<'a, T: Clone, const N: usize> RouteViewContext<'a, T, N> {
-    pub fn simulate<F>(&mut self, func: F)
+    pub fn simulate<F>(&mut self, func: F) -> bool
     where
         F: Fn(&mut RouteEditContext<'_, T>, [Route<'_, T>; N]),
     {
         self.actions.clear();
+        self.new_routes.clear();
         let mut ctx = RouteEditContext {
             context: self.context,
             actions: self.actions,
+            new_routes: self.new_routes,
             delta: self.delta_init,
         };
         func(&mut ctx, self.routes.clone());
         if ctx.delta < *self.best_delta {
             *self.best_delta = ctx.delta;
+            *self.used_routes = self.routes.iter().map(|x| x.index).collect();
+            swap(self.best_new_routes, self.new_routes);
             swap(self.best_actions, self.actions);
+            true
+        } else {
+            false
         }
     }
 }
@@ -474,37 +540,111 @@ impl Action {
 pub struct RouteEditContext<'a, T> {
     context: &'a RouteContext<T>,
     actions: &'a mut Vec<Action>,
+    new_routes: &'a mut Vec<(usize, usize)>,
     delta: i32,
 }
 
-impl<'a, T> RouteEditContext<'a, T> {
+impl<'a, T: HasPosition> RouteEditContext<'a, T> {
     pub fn submit<T1: RouteLike>(&mut self, route: T1) {
         route.execute(self);
         let (a, b) = (route.head(), route.tail());
-        self.delta += self.context.instance.distance(0, a as i16)
-            + self.context.instance.distance(b as i16, 0);
-        self.actions
-            .extend([Action::link(0, a), Action::link(b, 0)]);
+        let [depot, apos, bpos] = [0, a, b].map(|x| self.context.data.data(x).position());
+        self.delta += self.context.instance.distance(depot, apos)
+            + self.context.instance.distance(bpos, depot);
+        if a != 0 && b != 0 {
+            self.actions
+                .extend([Action::link(0, a), Action::link(b, 0)]);
+            self.new_routes.push((a, b));
+        }
     }
 }
 
 #[test]
 fn test() {
-    let mut llist = LinkedList::<usize>::default();
-    llist.insert(10, 0, 0);
-    llist.insert(11, 0, 0);
-    let ctx = RouteContext::new(llist, Instance::new(10, 10, vec![10], vec![vec![10]]));
+    fn coords_to_distance_matrix(coords: Vec<(i32, i32)>) -> Vec<Vec<i32>> {
+        let n = coords.len();
+        let mut matrix = vec![vec![0; n]; n];
+        for i in 0..n {
+            for j in 0..n {
+                let dx = coords[i].0 - coords[j].0;
+                let dy = coords[i].1 - coords[j].1;
+                matrix[i][j] = ((dx * dx + dy * dy) as f64).sqrt() as i32;
+            }
+        }
+        matrix
+    }
 
-    ctx.probe(|ctx, [route1, route2]| {
+    #[derive(Debug, Default, Clone)]
+    struct NodeData {
+        position: i16,
+    }
+
+    impl HasPosition for NodeData {
+        fn position(&self) -> i16 {
+            self.position
+        }
+    }
+
+    let instance = Instance::new(
+        8,
+        10,
+        vec![1; 8],
+        coords_to_distance_matrix(vec![
+            (1, 2),
+            (2, 1),
+            (-1, 2),
+            (-2, 1),
+            (-2, -1),
+            (-1, -2),
+            (1, -2),
+            (2, -1),
+        ]),
+    );
+
+    let mut llist = LinkedList::<NodeData>::default();
+    for route in [vec![1, 3, 5, 7], vec![2, 4, 6]] {
+        let mut depot = 0;
+        for pos in route {
+            let node = llist.insert(NodeData { position: pos }, depot, 0);
+            depot = node;
+        }
+    }
+    let mut ctx = RouteContext::new(llist, instance);
+    println!(
+        "{:?}",
+        ctx.iter()
+            .map(|r| r
+                .iter_nodes()
+                .map(|i| ctx.data.data(i).position())
+                .collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    );
+    let swap: ProbeFn<_, 2> = |ctx, [route1, route2]| {
         for e1 in route1.iter_edges() {
             for e2 in route2.iter_edges() {
-                ctx.simulate(|op, [r1, r2]| {
+                if ctx.simulate(|op, [r1, r2]| {
                     let (r11, r12) = r1.split_at(e1);
                     let (r21, r22) = r2.split_at(e2);
                     op.submit(r11.join(r22));
                     op.submit(r21.join(r12));
-                });
+                }) {
+                    return;
+                };
             }
         }
-    });
+    };
+    while let Some(m) = ctx.probe(swap) {
+        println!("Found move with delta {:?}", m);
+        ctx.update(m);
+
+        println!(
+            "{:?}",
+            ctx.iter()
+                .map(|r| r
+                    .iter_nodes()
+                    .map(|i| ctx.data.data(i).position())
+                    .collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        );
+    }
 }
