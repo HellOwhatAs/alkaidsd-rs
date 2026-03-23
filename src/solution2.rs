@@ -1,7 +1,3 @@
-use crate::Instance;
-use itertools::Itertools;
-use std::mem::swap;
-
 #[derive(Debug, Clone, Default)]
 struct NodeData<T> {
     succ: usize,
@@ -140,34 +136,33 @@ impl<T> LinkedList<T> {
         }
         self.link(left, successor);
     }
-
-    pub fn iter_range(&self, head: usize, tail: usize) -> ForwardIter<'_, T> {
-        ForwardIter {
-            list: self,
-            current: head,
-            end: tail,
-            exhausted: false,
-        }
-    }
-
-    pub fn iter_range_rev(&self, tail: usize, head: usize) -> BackwardIter<'_, T> {
-        BackwardIter {
-            list: self,
-            current: tail,
-            end: head,
-            exhausted: false,
-        }
-    }
 }
 
-pub struct ForwardIter<'a, T> {
-    list: &'a LinkedList<T>,
+pub struct FuncIter<F> {
+    func: F,
     current: usize,
     end: usize,
     exhausted: bool,
 }
 
-impl<'a, T> Iterator for ForwardIter<'a, T> {
+impl<F> FuncIter<F>
+where
+    F: Fn(usize) -> usize,
+{
+    pub fn new(func: F, start: usize, end: usize) -> Self {
+        FuncIter {
+            func,
+            current: start,
+            end,
+            exhausted: false,
+        }
+    }
+}
+
+impl<F> Iterator for FuncIter<F>
+where
+    F: Fn(usize) -> usize,
+{
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
         if self.exhausted {
@@ -177,33 +172,99 @@ impl<'a, T> Iterator for ForwardIter<'a, T> {
         if self.current == self.end {
             self.exhausted = true;
         } else {
-            self.current = self.list.successor(self.current);
+            self.current = (self.func)(self.current);
         }
         Some(ret)
     }
 }
 
-pub struct BackwardIter<'a, T> {
-    list: &'a LinkedList<T>,
-    current: usize,
-    end: usize,
-    exhausted: bool,
+pub fn dist(_from: usize, _to: usize) -> i32 {
+    0
 }
 
-impl<'a, T> Iterator for BackwardIter<'a, T> {
-    type Item = usize;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.exhausted {
-            return None;
-        }
-        let ret = self.current;
-        if self.current == self.end {
-            self.exhausted = true;
-        } else {
-            self.current = self.list.predecessor(self.current);
-        }
-        Some(ret)
-    }
+pub fn route_split_iter<'a>(
+    route: (usize, usize),
+    pred: impl Fn(usize) -> usize + Copy + 'a,
+    succ: impl Fn(usize) -> usize + Copy + 'a,
+) -> impl Iterator<Item = [(usize, usize); 2]> + 'a {
+    let (head, tail) = route;
+    (head != 0 && tail != 0)
+        .then(|| {
+            std::iter::once([(0, pred(head)), (head, tail)]).chain(
+                FuncIter::new(succ, head, tail).map(move |node| {
+                    [
+                        (head, node),
+                        (succ(node), if node == tail { 0 } else { tail }),
+                    ]
+                }),
+            )
+        })
+        .into_iter()
+        .flatten()
+}
+
+pub fn route_split_windows_iter<'a>(
+    route: (usize, usize),
+    window: usize,
+    pred: impl Fn(usize) -> usize + Copy + 'a,
+    succ: impl Fn(usize) -> usize + Copy + 'a,
+) -> impl Iterator<Item = [(usize, usize); 3]> + 'a {
+    let (head, tail) = route;
+    (head != 0 && tail != 0)
+        .then(|| {
+            (std::iter::once((pred(head), head))
+                .chain(FuncIter::new(succ, head, tail).map(move |node| (node, succ(node)))))
+            .zip(
+                (std::iter::once((pred(head), head))
+                    .chain(FuncIter::new(succ, head, tail).map(move |node| (node, succ(node)))))
+                .skip(window),
+            )
+            .map(move |(e1, e2)| {
+                [
+                    (if e1.1 == head { 0 } else { head }, e1.0),
+                    (e1.1, e2.0),
+                    (e2.1, if e2.0 == tail { 0 } else { tail }),
+                ]
+            })
+        })
+        .into_iter()
+        .flatten()
+}
+
+pub fn route_join<'a>(
+    route1: (usize, usize),
+    route2: (usize, usize),
+    pred: impl Fn(usize) -> usize + Copy + 'a,
+    succ: impl Fn(usize) -> usize + Copy + 'a,
+) -> (
+    (usize, usize),
+    impl Fn(usize) -> usize + Copy + 'a,
+    impl Fn(usize) -> usize + Copy + 'a,
+) {
+    let valid1 = route1.0 != 0 && route1.1 != 0;
+    let valid2 = route2.0 != 0 && route2.1 != 0;
+    let valid = valid1 && valid2;
+
+    let new_route = match (valid1, valid2) {
+        (true, true) => (route1.0, route2.1),
+        (true, false) => route1,
+        (false, true) => route2,
+        (false, false) => (0, 0),
+    };
+
+    (
+        new_route,
+        move |x| {
+            (valid && x == route2.0)
+                .then_some(route1.1)
+                .unwrap_or_else(|| pred(x))
+        },
+        move |x| {
+            (valid && x == route1.1)
+                .then_some(route2.0)
+                .unwrap_or_else(|| succ(x))
+        },
+    )
 }
 
 #[test]
@@ -217,28 +278,67 @@ fn test() {
     }
     let routes = [(1, 5), (6, 9)];
 
-    for edge1 in std::iter::once((0, routes[0].0)).chain(
-        list.iter_range(routes[0].0, routes[0].1)
-            .map(|node| (node, list.successor(node))),
-    ) {
-        let r11 = (routes[0].0, edge1.0);
-        let r12 = (edge1.1, routes[0].1);
+    let [r1, r2] = routes;
 
-        for edge2 in std::iter::once((0, routes[1].0)).chain(
-            list.iter_range(routes[1].0, routes[1].1)
-                .map(|node| (node, list.successor(node))),
-        ) {
-            let r21 = (routes[1].0, edge2.0);
-            let r22 = (edge2.1, routes[1].1);
+    let delta = 0;
+    let pred = |x| list.predecessor(x);
+    let succ = |x| list.successor(x);
+
+    // CASE 1
+    for [r11, a, r12] in route_split_windows_iter(r1, 1, pred, succ) {
+        let (r1_, pred, succ) = route_join(r11, r12, pred, succ);
+        for [r21, b, r22] in route_split_windows_iter(r2, 1, pred, succ) {
+            let (r2_, pred, succ) = route_join(r21, r22, pred, succ);
+            for [r11_, r12_] in route_split_iter(r1_, pred, succ) {
+                let (res1, pred, succ) = route_join(r11_, b, pred, succ);
+                let (res1, pred, succ) = route_join(res1, r12_, pred, succ);
+                for [r21_, r22_] in route_split_iter(r2_, pred, succ) {
+                    let (res2, pred, succ) = route_join(r21_, a, pred, succ);
+                    let (res2, pred, succ) = route_join(res2, r22_, pred, succ);
+                }
+            }
+        }
+    }
+
+    // CASE 2
+    for (edge1, edge2) in (std::iter::once((pred(r1.0), r1.0))
+        .chain(FuncIter::new(succ, r1.0, r1.1).map(|node| (node, succ(node)))))
+    .zip(
+        std::iter::once((pred(r1.0), r1.0))
+            .chain(FuncIter::new(succ, r1.0, r1.1).map(|node| (node, succ(node))))
+            .skip(1),
+    ) {
+        let delta = delta - dist(edge1.0, edge1.1) - dist(edge2.0, edge2.1);
+        let (r11, a, r12) = ((r1.0, edge1.0), (edge1.1, edge2.0), (edge2.1, r1.1));
+        let pred = |x| (x == edge2.1).then_some(edge1.0).unwrap_or_else(|| pred(x));
+        let succ = |x| (x == edge1.0).then_some(edge2.1).unwrap_or_else(|| succ(x));
+        let delta = delta + dist(edge1.0, edge2.1);
+        for (edge3, edge4) in std::iter::once((pred(r2.0), r2.0))
+            .chain(FuncIter::new(succ, r2.0, r2.1).map(|node| (node, succ(node))))
+            .zip(
+                std::iter::once((pred(r2.0), r2.0))
+                    .chain(FuncIter::new(succ, r2.0, r2.1).map(|node| (node, succ(node))))
+                    .skip(1),
+            )
+        {
+            let delta = delta - dist(edge3.0, edge3.1) - dist(edge4.0, edge4.1);
+            let (r21, b, r22) = ((r2.0, edge3.0), (edge3.1, edge4.0), (edge4.1, r2.1));
+            let pred = |x| (x == edge4.1).then_some(edge3.0).unwrap_or_else(|| pred(x));
+            let succ = |x| (x == edge3.0).then_some(edge4.1).unwrap_or_else(|| succ(x));
+            let delta = delta + dist(edge3.0, edge4.1);
+            for edge5 in std::iter::once((pred(r11.0), r11.0))
+                .chain(FuncIter::new(succ, r11.0, r12.1).map(|node| (node, succ(node))))
             {
-                println!("edge1 = {:?}; edge2 = {:?}", edge1, edge2);
-                // println!("{:?}", (0, list.data(r11.0)));
-                // println!("{:?}", (list.data(r11.1), list.data(r22.0)));
-                // println!("{:?}", (list.data(r22.0), 0));
-                // println!("{:?}", (0, list.data(r21.0)));
-                // println!("{:?}", (list.data(r21.1), list.data(r12.0)));
-                // println!("{:?}", (list.data(r12.0), 0));
-                // println!();
+                let delta = delta - dist(edge5.0, edge5.1);
+                let (r11_, r12_) = ((r11.0, edge5.0), (edge5.1, r12.1));
+                for edge6 in std::iter::once((pred(r21.0), r21.0))
+                    .chain(FuncIter::new(succ, r21.0, r22.1).map(|node| (node, succ(node))))
+                {
+                    let delta = delta - dist(edge6.0, edge6.1);
+                    let (r21_, r22_) = ((r21.0, edge6.0), (edge6.1, r22.1));
+                    let delta = delta + dist(r11_.1, b.0) + dist(b.1, r12_.0);
+                    let delta = delta + dist(r21_.1, a.0) + dist(a.1, r22_.0);
+                }
             }
         }
     }
