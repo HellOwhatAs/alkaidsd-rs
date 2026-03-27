@@ -142,7 +142,6 @@ pub struct FuncIter<F> {
     func: F,
     current: usize,
     end: usize,
-    exhausted: bool,
 }
 
 impl<F> FuncIter<F>
@@ -154,7 +153,6 @@ where
             func,
             current: start,
             end,
-            exhausted: false,
         }
     }
 }
@@ -165,181 +163,378 @@ where
 {
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.exhausted {
-            return None;
-        }
         let ret = self.current;
         if self.current == self.end {
-            self.exhausted = true;
+            None
         } else {
             self.current = (self.func)(self.current);
+            Some(ret)
         }
-        Some(ret)
     }
 }
 
-pub fn dist(_from: usize, _to: usize) -> i32 {
-    0
+pub struct SlicesSplitIter<F, const N: usize, const I: usize> {
+    next: F,
+    slices: [(usize, usize); N],
+    current: usize,
 }
 
-pub fn route_split_iter<'a>(
-    route: (usize, usize),
-    pred: impl Fn(usize) -> usize + Copy + 'a,
-    succ: impl Fn(usize) -> usize + Copy + 'a,
-) -> impl Iterator<Item = [(usize, usize); 2]> + 'a {
-    let (head, tail) = route;
-    (head != 0 && tail != 0)
-        .then(|| {
-            std::iter::once([(0, pred(head)), (head, tail)]).chain(
-                FuncIter::new(succ, head, tail).map(move |node| {
-                    [
-                        (head, node),
-                        (succ(node), if node == tail { 0 } else { tail }),
-                    ]
-                }),
-            )
+impl<F, const N: usize, const I: usize> SlicesSplitIter<F, N, I>
+where
+    F: Fn(usize) -> usize,
+{
+    pub const I: usize = I;
+
+    pub fn new(next: F, slices: [(usize, usize); N]) -> Self {
+        Self {
+            next,
+            slices,
+            current: slices[I].0,
+        }
+    }
+
+    pub fn to_index<const I1: usize>(self) -> SlicesSplitIter<F, N, I1> {
+        SlicesSplitIter {
+            next: self.next,
+            slices: self.slices,
+            current: self.slices[I1].0,
+        }
+    }
+}
+
+impl<F, const N: usize, const I: usize> Iterator for SlicesSplitIter<F, N, I>
+where
+    F: Fn(usize) -> usize,
+{
+    type Item = usize;
+    fn next(&mut self) -> Option<Self::Item> {
+        let ret = self.current;
+        if self.current == self.slices[I].1 {
+            None
+        } else {
+            self.current = (self.next)(self.current);
+            Some(ret)
+        }
+    }
+}
+
+pub struct SlicesSplitWindowsIter<F, const N: usize, const I1: usize, const I2: usize> {
+    next: F,
+    slices: [(usize, usize); N],
+    current1: usize,
+    current2: usize,
+}
+
+impl<F, const N: usize, const I1: usize, const I2: usize> SlicesSplitWindowsIter<F, N, I1, I2>
+where
+    F: Fn(usize) -> usize,
+{
+    pub fn new(next: F, slices: [(usize, usize); N], window: usize) -> Result<Self, usize> {
+        let current2 = 0;
+        todo!()
+        Ok(Self {
+            next,
+            slices,
+            current1: slices[I1].0,
+            current2,
         })
-        .into_iter()
-        .flatten()
-}
-
-pub fn route_split_windows_iter<'a>(
-    route: (usize, usize),
-    window: usize,
-    pred: impl Fn(usize) -> usize + Copy + 'a,
-    succ: impl Fn(usize) -> usize + Copy + 'a,
-) -> impl Iterator<Item = [(usize, usize); 3]> + 'a {
-    let (head, tail) = route;
-    (head != 0 && tail != 0)
-        .then(|| {
-            (std::iter::once((pred(head), head))
-                .chain(FuncIter::new(succ, head, tail).map(move |node| (node, succ(node)))))
-            .zip(
-                (std::iter::once((pred(head), head))
-                    .chain(FuncIter::new(succ, head, tail).map(move |node| (node, succ(node)))))
-                .skip(window),
-            )
-            .map(move |(e1, e2)| {
-                [
-                    (if e1.1 == head { 0 } else { head }, e1.0),
-                    (e1.1, e2.0),
-                    (e2.1, if e2.0 == tail { 0 } else { tail }),
-                ]
-            })
-        })
-        .into_iter()
-        .flatten()
-}
-
-pub fn route_join<'a>(
-    route1: (usize, usize),
-    route2: (usize, usize),
-    pred: impl Fn(usize) -> usize + Copy + 'a,
-    succ: impl Fn(usize) -> usize + Copy + 'a,
-) -> (
-    (usize, usize),
-    impl Fn(usize) -> usize + Copy + 'a,
-    impl Fn(usize) -> usize + Copy + 'a,
-) {
-    let valid1 = route1.0 != 0 && route1.1 != 0;
-    let valid2 = route2.0 != 0 && route2.1 != 0;
-    let valid = valid1 && valid2;
-
-    let new_route = match (valid1, valid2) {
-        (true, true) => (route1.0, route2.1),
-        (true, false) => route1,
-        (false, true) => route2,
-        (false, false) => (0, 0),
-    };
-
-    (
-        new_route,
-        move |x| {
-            (valid && x == route2.0)
-                .then_some(route1.1)
-                .unwrap_or_else(|| pred(x))
-        },
-        move |x| {
-            (valid && x == route1.1)
-                .then_some(route2.0)
-                .unwrap_or_else(|| succ(x))
-        },
-    )
+    }
 }
 
 #[test]
-fn test() {
-    let mut list = LinkedList::<usize>::new();
-    for arr in [vec![1, 3, 5, 7, 9], vec![2, 4, 6, 8]] {
-        let mut pred = 0;
-        for i in arr.into_iter() {
-            pred = list.insert(i, pred, 0);
-        }
-    }
-    let routes = [(1, 5), (6, 9)];
-
-    let [r1, r2] = routes;
-
-    let delta = 0;
-    let pred = |x| list.predecessor(x);
-    let succ = |x| list.successor(x);
-
-    // CASE 1
-    for [r11, a, r12] in route_split_windows_iter(r1, 1, pred, succ) {
-        let (r1_, pred, succ) = route_join(r11, r12, pred, succ);
-        for [r21, b, r22] in route_split_windows_iter(r2, 1, pred, succ) {
-            let (r2_, pred, succ) = route_join(r21, r22, pred, succ);
-            for [r11_, r12_] in route_split_iter(r1_, pred, succ) {
-                let (res1, pred, succ) = route_join(r11_, b, pred, succ);
-                let (res1, pred, succ) = route_join(res1, r12_, pred, succ);
-                for [r21_, r22_] in route_split_iter(r2_, pred, succ) {
-                    let (res2, pred, succ) = route_join(r21_, a, pred, succ);
-                    let (res2, pred, succ) = route_join(res2, r22_, pred, succ);
-                }
-            }
-        }
-    }
-
-    // CASE 2
-    for (edge1, edge2) in (std::iter::once((pred(r1.0), r1.0))
-        .chain(FuncIter::new(succ, r1.0, r1.1).map(|node| (node, succ(node)))))
-    .zip(
-        std::iter::once((pred(r1.0), r1.0))
-            .chain(FuncIter::new(succ, r1.0, r1.1).map(|node| (node, succ(node))))
-            .skip(1),
-    ) {
-        let delta = delta - dist(edge1.0, edge1.1) - dist(edge2.0, edge2.1);
-        let (r11, a, r12) = ((r1.0, edge1.0), (edge1.1, edge2.0), (edge2.1, r1.1));
-        let pred = |x| (x == edge2.1).then_some(edge1.0).unwrap_or_else(|| pred(x));
-        let succ = |x| (x == edge1.0).then_some(edge2.1).unwrap_or_else(|| succ(x));
-        let delta = delta + dist(edge1.0, edge2.1);
-        for (edge3, edge4) in std::iter::once((pred(r2.0), r2.0))
-            .chain(FuncIter::new(succ, r2.0, r2.1).map(|node| (node, succ(node))))
-            .zip(
-                std::iter::once((pred(r2.0), r2.0))
-                    .chain(FuncIter::new(succ, r2.0, r2.1).map(|node| (node, succ(node))))
-                    .skip(1),
-            )
+fn cross() {
+    let list = LinkedList::<usize>::new();
+    let (route_0, route_1) = ((1, 2), (3, 4));
+    // route_0 CASE 1
+    {
+        let route_3 = route_0;
+        // route_1 CASE 1
         {
-            let delta = delta - dist(edge3.0, edge3.1) - dist(edge4.0, edge4.1);
-            let (r21, b, r22) = ((r2.0, edge3.0), (edge3.1, edge4.0), (edge4.1, r2.1));
-            let pred = |x| (x == edge4.1).then_some(edge3.0).unwrap_or_else(|| pred(x));
-            let succ = |x| (x == edge3.0).then_some(edge4.1).unwrap_or_else(|| succ(x));
-            let delta = delta + dist(edge3.0, edge4.1);
-            for edge5 in std::iter::once((pred(r11.0), r11.0))
-                .chain(FuncIter::new(succ, r11.0, r12.1).map(|node| (node, succ(node))))
+            let route_5 = route_1;
+            // Final
+            let (route_6, route_7) = (route_5, route_3);
+        }
+        // route_1 CASE 2
+        {
+            for split in FuncIter::new(|x| list.successor(x), route_1.0, route_1.1) {
+                let (route_4, route_5) = ((route_1.0, split), (list.successor(split), route_1.1));
+                // Final
+                let (route_6, route_7) = (route_5, [route_3, route_4]);
+            }
+        }
+        // route_1 CASE 3
+        {
+            let route_4 = route_1;
+            // Final
+            let route_7 = [route_3, route_4];
+        }
+    }
+    // route_0 CASE 2
+    {
+        for split in FuncIter::new(|x| list.successor(x), route_0.0, route_0.1) {
+            let (route_2, route_3) = ((route_0.0, split), (list.successor(split), route_0.1));
+            // route_1 CASE 1
             {
-                let delta = delta - dist(edge5.0, edge5.1);
-                let (r11_, r12_) = ((r11.0, edge5.0), (edge5.1, r12.1));
-                for edge6 in std::iter::once((pred(r21.0), r21.0))
-                    .chain(FuncIter::new(succ, r21.0, r22.1).map(|node| (node, succ(node))))
-                {
-                    let delta = delta - dist(edge6.0, edge6.1);
-                    let (r21_, r22_) = ((r21.0, edge6.0), (edge6.1, r22.1));
-                    let delta = delta + dist(r11_.1, b.0) + dist(b.1, r12_.0);
-                    let delta = delta + dist(r21_.1, a.0) + dist(a.1, r22_.0);
+                let route_5 = route_1;
+                // Final
+                let (route_6, route_7) = ([route_2, route_5], route_3);
+            }
+            // route_1 CASE 2
+            {
+                for split in FuncIter::new(|x| list.successor(x), route_1.0, route_1.1) {
+                    let (route_4, route_5) =
+                        ((route_1.0, split), (list.successor(split), route_1.1));
+                    // Final
+                    let (route_6, route_7) = ([route_2, route_5], [route_3, route_4]);
                 }
             }
+            // route_1 CASE 3
+            {
+                let route_4 = route_1;
+                // Final
+                let (route_6, route_7) = (route_2, [route_3, route_4]);
+            }
+        }
+    }
+    // route_0 CASE 3
+    {
+        let route_2 = route_0;
+        // route_1 CASE 1
+        {
+            let route_5 = route_1;
+            // Final
+            let route_6 = [route_2, route_5];
+        }
+        // route_1 CASE 2
+        {
+            for split in FuncIter::new(|x| list.successor(x), route_1.0, route_1.1) {
+                let (route_4, route_5) = ((route_1.0, split), (list.successor(split), route_1.1));
+                // Final
+                let (route_6, route_7) = ([route_2, route_5], route_4);
+            }
+        }
+        // route_1 CASE 3
+        {
+            let route_4 = route_1;
+            // Final
+            let (route_6, route_7) = (route_2, route_4);
+        }
+    }
+}
+
+#[test]
+fn swap() {
+    for _ in 0..1 {
+        let (m, n) = (3, 3);
+        let list = LinkedList::<usize>::new();
+        let (route_0, route_1) = ((1, 2), (3, 4));
+        // route_0 prepare 1
+        let mut cnt = m - 1;
+        let mut split2 = route_0.0;
+        if split2 == route_0.1 {
+            continue;
+        }
+        while cnt > 0 {
+            let succ = list.successor(split2);
+            if succ == route_0.1 {
+                break;
+            }
+            split2 = succ;
+            cnt -= 1;
+        }
+        if cnt != 0 {
+            continue;
+        }
+        // route_0 CASE 1
+        {
+            let (route_3, route_4) = ((route_0.0, split2), (list.successor(split2), route_0.1));
+
+            ////////////////////////////////
+            // route_1 prepare 1
+            let mut cnt = n - 1;
+            let mut split2 = route_1.0;
+            if split2 == route_1.1 {
+                continue;
+            }
+            while cnt > 0 {
+                let succ = list.successor(split2);
+                if succ == route_1.1 {
+                    break;
+                }
+                split2 = succ;
+                cnt -= 1;
+            }
+            if cnt != 0 {
+                continue;
+            }
+            // route_1 CASE 1
+            {
+                let (route_6, route_7) = ((route_1.0, split2), (list.successor(split2), route_1.1));
+                // Final
+                let route_9 = [route_6, route_4];
+                let route_11 = [route_3, route_7];
+            }
+            // route_1 CASE 2
+            let mut split1 = route_1.0;
+            {
+                loop {
+                    let succ = list.successor(split2);
+                    if succ == route_1.1 {
+                        break;
+                    }
+                    split2 = succ;
+                    let (route_5, route_6, route_7) = (
+                        (route_1.0, split1),
+                        (list.successor(split1), split2),
+                        (list.successor(split2), route_1.1),
+                    );
+                    split1 = list.successor(split1);
+                    // Final
+                    let route_9 = [route_6, route_4];
+                    let route_11 = [route_5, route_3, route_7];
+                }
+            }
+            // route_1 CASE 3
+            {
+                split1 = list.successor(split1);
+                let (route_5, route_6) = ((route_0.0, split1), (list.successor(split1), route_0.1));
+                // Final
+                let route_9 = [route_6, route_4];
+                let route_11 = [route_5, route_3];
+            }
+            ///////////////////////////////
+        }
+        // route_0 CASE 2
+        let mut split1 = route_0.0;
+        {
+            loop {
+                let succ = list.successor(split2);
+                if succ == route_0.1 {
+                    break;
+                }
+                split2 = succ;
+                let (route_2, route_3, route_4) = (
+                    (route_0.0, split1),
+                    (list.successor(split1), split2),
+                    (list.successor(split2), route_0.1),
+                );
+                split1 = list.successor(split1);
+                ////////////////////////////////
+                // route_1 prepare 1
+                let mut cnt = n - 1;
+                let mut split2 = route_1.0;
+                if split2 == route_1.1 {
+                    continue;
+                }
+                while cnt > 0 {
+                    let succ = list.successor(split2);
+                    if succ == route_1.1 {
+                        break;
+                    }
+                    split2 = succ;
+                    cnt -= 1;
+                }
+                if cnt != 0 {
+                    continue;
+                }
+                // route_1 CASE 1
+                {
+                    let (route_6, route_7) =
+                        ((route_1.0, split2), (list.successor(split2), route_1.1));
+                    // Final
+                    let route_9 = [route_2, route_6, route_4];
+                    let route_11 = [route_3, route_7];
+                }
+                // route_1 CASE 2
+                let mut split1 = route_1.0;
+                {
+                    loop {
+                        let succ = list.successor(split2);
+                        if succ == route_1.1 {
+                            break;
+                        }
+                        split2 = succ;
+                        let (route_5, route_6, route_7) = (
+                            (route_1.0, split1),
+                            (list.successor(split1), split2),
+                            (list.successor(split2), route_1.1),
+                        );
+                        split1 = list.successor(split1);
+                        // Final
+                        let route_9 = [route_2, route_6, route_4];
+                        let route_11 = [route_5, route_3, route_7];
+                    }
+                }
+                // route_1 CASE 3
+                {
+                    split1 = list.successor(split1);
+                    let (route_5, route_6) =
+                        ((route_0.0, split1), (list.successor(split1), route_0.1));
+                    // Final
+                    let route_9 = [route_2, route_6, route_4];
+                    let route_11 = [route_5, route_3];
+                }
+                ///////////////////////////////
+            }
+        }
+        // route_0 CASE 3
+        {
+            split1 = list.successor(split1);
+            let (route_2, route_3) = ((route_0.0, split1), (list.successor(split1), route_0.1));
+            ////////////////////////////////
+            // route_1 prepare 1
+            let mut cnt = n - 1;
+            let mut split2 = route_1.0;
+            if split2 == route_1.1 {
+                continue;
+            }
+            while cnt > 0 {
+                let succ = list.successor(split2);
+                if succ == route_1.1 {
+                    break;
+                }
+                split2 = succ;
+                cnt -= 1;
+            }
+            if cnt != 0 {
+                continue;
+            }
+            // route_1 CASE 1
+            {
+                let (route_6, route_7) = ((route_1.0, split2), (list.successor(split2), route_1.1));
+                // Final
+                let route_9 = [route_2, route_6];
+                let route_11 = [route_3, route_7];
+            }
+            // route_1 CASE 2
+            let mut split1 = route_1.0;
+            {
+                loop {
+                    let succ = list.successor(split2);
+                    if succ == route_1.1 {
+                        break;
+                    }
+                    split2 = succ;
+                    let (route_5, route_6, route_7) = (
+                        (route_1.0, split1),
+                        (list.successor(split1), split2),
+                        (list.successor(split2), route_1.1),
+                    );
+                    split1 = list.successor(split1);
+                    // Final
+                    let route_9 = [route_2, route_6];
+                    let route_11 = [route_5, route_3, route_7];
+                }
+            }
+            // route_1 CASE 3
+            {
+                split1 = list.successor(split1);
+                let (route_5, route_6) = ((route_0.0, split1), (list.successor(split1), route_0.1));
+                // Final
+                let route_9 = [route_2, route_6];
+                let route_11 = [route_5, route_3];
+            }
+            ///////////////////////////////
         }
     }
 }
