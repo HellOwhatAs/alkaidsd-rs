@@ -221,8 +221,8 @@ where
 pub struct SlicesSplitWindowsIter<F, const N: usize, const I1: usize, const I2: usize> {
     next: F,
     slices: [(usize, usize); N],
-    current1: usize,
-    current2: usize,
+    pub current1: usize,
+    pub current2: usize,
 }
 
 impl<F, const N: usize, const I1: usize, const I2: usize> SlicesSplitWindowsIter<F, N, I1, I2>
@@ -230,14 +230,389 @@ where
     F: Fn(usize) -> usize,
 {
     pub fn new(next: F, slices: [(usize, usize); N], window: usize) -> Result<Self, usize> {
-        let current2 = 0;
-        todo!()
+        const { assert!(I1 < N && I2 < N) };
+        let mut cnt = window;
+        let mut current = slices[I2].0;
+        while cnt > 0 {
+            cnt -= 1;
+            if current == slices[I2].1 {
+                return Err(cnt);
+            } else {
+                current = (next)(current);
+            }
+        }
         Ok(Self {
             next,
             slices,
             current1: slices[I1].0,
-            current2,
+            current2: current,
         })
+    }
+
+    pub fn from01<const I3: usize>(other: SlicesSplitWindowsIter<F, N, I1, I3>) -> Self {
+        const { assert!(I1 < N && I2 < N && I3 < N) };
+        const { assert!(I3 + 1 == I2) };
+        let current1 = (other.next)(other.current1);
+        Self {
+            next: other.next,
+            slices: other.slices,
+            current1,
+            current2: other.slices[I2].0,
+        }
+    }
+
+    pub fn from10<const I3: usize>(other: SlicesSplitWindowsIter<F, N, I3, I2>) -> Self {
+        const { assert!(I1 < N && I2 < N && I3 < N) };
+        const { assert!(I3 + 1 == I1) };
+        let current2 = (other.next)(other.current2);
+        Self {
+            next: other.next,
+            slices: other.slices,
+            current1: other.slices[I1].0,
+            current2,
+        }
+    }
+
+    pub fn from11<const I3: usize, const I4: usize>(
+        other: SlicesSplitWindowsIter<F, N, I3, I4>,
+    ) -> Self {
+        const { assert!(I1 < N && I2 < N && I3 < N && I4 < N) };
+        const { assert!(I3 + 1 == I1) };
+        const { assert!(I4 + 1 == I2) };
+        Self {
+            next: other.next,
+            slices: other.slices,
+            current1: other.slices[I1].0,
+            current2: other.slices[I2].0,
+        }
+    }
+
+    pub fn first_exhausted(&self) -> bool {
+        self.current1 == self.slices[I1].1
+    }
+
+    pub fn second_exhausted(&self) -> bool {
+        self.current2 == self.slices[I2].1
+    }
+}
+
+impl<F, const N: usize, const I1: usize, const I2: usize> Iterator
+    for SlicesSplitWindowsIter<F, N, I1, I2>
+where
+    F: Fn(usize) -> usize,
+{
+    type Item = (usize, usize);
+    fn next(&mut self) -> Option<Self::Item> {
+        let (ret1, ret2) = (self.current1, self.current2);
+        if self.first_exhausted() || self.second_exhausted() {
+            None
+        } else {
+            (self.current1, self.current2) =
+                ((self.next)(self.current1), (self.next)(self.current2));
+            Some((ret1, ret2))
+        }
+    }
+}
+
+#[test]
+fn test() {
+    let slices = [(1, 3), (4, 4), (9, 13), (100, 101)];
+    let w11 = |mut wit: SlicesSplitWindowsIter<fn(usize) -> usize, 4, 1, 1>| {
+        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+        match (wit.first_exhausted(), wit.second_exhausted()) {
+            (true, true) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 2, 2>::from11(wit);
+                w11(wit);
+            },
+            (true, false) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 2, 1>::from10(wit);
+                w10(wit);
+            },
+            (false, true) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from01(wit);
+                w01(wit);
+            },
+            (false, false) => unreachable!(),
+        }
+    };
+    let w10 = |mut wit: SlicesSplitWindowsIter<fn(usize) -> usize, 4, 1, 0>| {
+        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+        match (wit.first_exhausted(), wit.second_exhausted()) {
+            (true, true) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 2, 1>::from11(wit);
+                w21(wit);
+            },
+            (true, false) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 2, 0>::from10(wit);
+                w20(wit);
+            },
+            (false, true) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from01(wit);
+                w11(wit);
+            },
+            (false, false) => unreachable!(),
+        }
+    };
+    let w01 = |mut wit: SlicesSplitWindowsIter<fn(usize) -> usize, 4, 0, 1>| {
+        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+        match (wit.first_exhausted(), wit.second_exhausted()) {
+            (true, true) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from11(wit);
+                w12(wit);
+            }
+            (true, false) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from10(wit);
+                w11(wit);
+            }
+            (false, true) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 0, 2>::from01(wit);
+                w02(wit);
+            }
+            (false, false) => unreachable!(),
+        }
+    };
+    let w00 = |mut wit: SlicesSplitWindowsIter<fn(usize) -> usize, 4, 0, 0>| {
+        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+        match (wit.first_exhausted(), wit.second_exhausted()) {
+            (true, true) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from11(wit);
+                w11(wit);
+            }
+            (true, false) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 1, 0>::from10(wit);
+                w10(wit);
+            }
+            (false, true) => {
+                println!("{:?}", (wit.current1, wit.current2));
+                let wit = SlicesSplitWindowsIter::<_, _, 0, 1>::from01(wit);
+                w01(wit);
+            }
+            (false, false) => unreachable!(),
+        }
+    };
+    match SlicesSplitWindowsIter::<_, _, 0, 0>::new(|x| x + 1, slices, 3) {
+        Ok(mut wit) => {
+            println!("{:?}", (&mut wit).collect::<Vec<_>>());
+            println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+            match (wit.first_exhausted(), wit.second_exhausted()) {
+                (true, true) => {
+                    println!("{:?}", (wit.current1, wit.current2));
+                    let mut wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from11(wit);
+                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                }
+                (true, false) => {
+                    println!("{:?}", (wit.current1, wit.current2));
+                    let mut wit = SlicesSplitWindowsIter::<_, _, 1, 0>::from10(wit);
+                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                }
+                (false, true) => {
+                    println!("{:?}", (wit.current1, wit.current2));
+                    let mut wit = SlicesSplitWindowsIter::<_, _, 0, 1>::from01(wit);
+                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                    println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+                    match (wit.first_exhausted(), wit.second_exhausted()) {
+                        (true, true) => {
+                            println!("{:?}", (wit.current1, wit.current2));
+                            let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from11(wit);
+                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                        }
+                        (true, false) => {
+                            println!("{:?}", (wit.current1, wit.current2));
+                            let mut wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from10(wit);
+                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                            println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+                            match (wit.first_exhausted(), wit.second_exhausted()) {
+                                (true, true) => {
+                                    println!("{:?}", (wit.current1, wit.current2));
+                                    let mut wit = SlicesSplitWindowsIter::<_, _, 2, 2>::from11(wit);
+                                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                }
+                                (true, false) => {
+                                    println!("{:?}", (wit.current1, wit.current2));
+                                    let mut wit = SlicesSplitWindowsIter::<_, _, 2, 1>::from10(wit);
+                                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                }
+                                (false, true) => {
+                                    println!("{:?}", (wit.current1, wit.current2));
+                                    let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from01(wit);
+                                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                    println!(
+                                        "<{:?}>",
+                                        (wit.first_exhausted(), wit.second_exhausted())
+                                    );
+                                    match (wit.first_exhausted(), wit.second_exhausted()) {
+                                        (true, true) => {
+                                            println!("{:?}", (wit.current1, wit.current2));
+                                        }
+                                        (true, false) => {
+                                            println!("{:?}", (wit.current1, wit.current2));
+                                            let mut wit =
+                                                SlicesSplitWindowsIter::<_, _, 2, 2>::from10(wit);
+                                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                        }
+                                        (false, true) => {
+                                            println!("{:?}", (wit.current1, wit.current2));
+                                        }
+                                        (false, false) => unreachable!(),
+                                    }
+                                }
+                                (false, false) => unreachable!(),
+                            }
+                        }
+                        (false, true) => {
+                            println!("{:?}", (wit.current1, wit.current2));
+                            let mut wit = SlicesSplitWindowsIter::<_, _, 0, 2>::from01(wit);
+                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                        }
+                        (false, false) => unreachable!(),
+                    }
+                }
+                (false, false) => unreachable!(),
+            }
+        }
+        Err(cnt) => match SlicesSplitWindowsIter::<_, _, 0, 1>::new(|x| x + 1, slices, cnt) {
+            Ok(mut wit) => {
+                println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+                match (wit.first_exhausted(), wit.second_exhausted()) {
+                    (true, true) => {
+                        println!("{:?}", (wit.current1, wit.current2));
+                        let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from11(wit);
+                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                    }
+                    (true, false) => {
+                        println!("{:?}", (wit.current1, wit.current2));
+                        let mut wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from10(wit);
+                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+                        match (wit.first_exhausted(), wit.second_exhausted()) {
+                            (true, true) => {
+                                println!("{:?}", (wit.current1, wit.current2));
+                                let mut wit = SlicesSplitWindowsIter::<_, _, 2, 2>::from11(wit);
+                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                            }
+                            (true, false) => {
+                                println!("{:?}", (wit.current1, wit.current2));
+                                let mut wit = SlicesSplitWindowsIter::<_, _, 2, 1>::from10(wit);
+                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                            }
+                            (false, true) => {
+                                println!("{:?}", (wit.current1, wit.current2));
+                                let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from01(wit);
+                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+                                match (wit.first_exhausted(), wit.second_exhausted()) {
+                                    (true, true) => {
+                                        println!("{:?}", (wit.current1, wit.current2));
+                                    }
+                                    (true, false) => {
+                                        println!("{:?}", (wit.current1, wit.current2));
+                                        let mut wit =
+                                            SlicesSplitWindowsIter::<_, _, 2, 2>::from10(wit);
+                                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                    }
+                                    (false, true) => {
+                                        println!("{:?}", (wit.current1, wit.current2));
+                                    }
+                                    (false, false) => unreachable!(),
+                                }
+                            }
+                            (false, false) => unreachable!(),
+                        }
+                    }
+                    (false, true) => {
+                        println!("{:?}", (wit.current1, wit.current2));
+                        let mut wit = SlicesSplitWindowsIter::<_, _, 0, 2>::from01(wit);
+                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+                        match (wit.first_exhausted(), wit.second_exhausted()) {
+                            (true, true) => {
+                                println!("{:?}", (wit.current1, wit.current2));
+                            }
+                            (true, false) => {
+                                println!("{:?}", (wit.current1, wit.current2));
+                                let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from10(wit);
+                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+                                match (wit.first_exhausted(), wit.second_exhausted()) {
+                                    (true, true) => {
+                                        println!("{:?}", (wit.current1, wit.current2));
+                                    }
+                                    (true, false) => {
+                                        println!("{:?}", (wit.current1, wit.current2));
+                                        let mut wit =
+                                            SlicesSplitWindowsIter::<_, _, 2, 2>::from10(wit);
+                                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                        match (wit.first_exhausted(), wit.second_exhausted()) {
+                                            (true, true) => {
+                                                println!("{:?}", (wit.current1, wit.current2));
+                                            }
+                                            (true, false) => {
+                                                println!("{:?}", (wit.current1, wit.current2));
+                                                let mut wit =
+                                                    SlicesSplitWindowsIter::<_, _, 3, 2>::from10(
+                                                        wit,
+                                                    );
+                                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                                            }
+                                            (false, true) => {
+                                                println!("{:?}", (wit.current1, wit.current2));
+                                            }
+                                            (false, false) => unreachable!(),
+                                        }
+                                    }
+                                    (false, true) => {
+                                        println!("{:?}", (wit.current1, wit.current2));
+                                    }
+                                    (false, false) => unreachable!(),
+                                }
+                            }
+                            (false, true) => {
+                                println!("{:?}", (wit.current1, wit.current2));
+                            }
+                            (false, false) => unreachable!(),
+                        }
+                    }
+                    (false, false) => unreachable!(),
+                }
+            }
+            Err(cnt) => match SlicesSplitWindowsIter::<_, _, 0, 2>::new(|x| x + 1, slices, cnt) {
+                Ok(mut wit) => {
+                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                    println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
+                    match (wit.first_exhausted(), wit.second_exhausted()) {
+                        (true, true) => {
+                            println!("{:?}", (wit.current1, wit.current2));
+                        }
+                        (true, false) => {
+                            println!("{:?}", (wit.current1, wit.current2));
+                            let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from10(wit);
+                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
+                        }
+                        (false, true) => {
+                            println!("{:?}", (wit.current1, wit.current2));
+                        }
+                        (false, false) => unreachable!(),
+                    }
+                }
+                _ => {}
+            },
+        },
     }
 }
 
