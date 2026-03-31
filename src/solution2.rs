@@ -294,6 +294,16 @@ where
     pub fn second_exhausted(&self) -> bool {
         self.current2 == self.slices[I2].1
     }
+
+    #[inline(always)]
+    pub const fn i1(&self) -> usize {
+        I1
+    }
+
+    #[inline(always)]
+    pub const fn i2(&self) -> usize {
+        I2
+    }
 }
 
 impl<F, const N: usize, const I1: usize, const I2: usize> Iterator
@@ -301,7 +311,7 @@ impl<F, const N: usize, const I1: usize, const I2: usize> Iterator
 where
     F: Fn(usize) -> usize,
 {
-    type Item = (usize, usize);
+    type Item = ((usize, usize), (usize, usize));
     fn next(&mut self) -> Option<Self::Item> {
         let (ret1, ret2) = (self.current1, self.current2);
         if self.first_exhausted() || self.second_exhausted() {
@@ -309,607 +319,56 @@ where
         } else {
             (self.current1, self.current2) =
                 ((self.next)(self.current1), (self.next)(self.current2));
-            Some((ret1, ret2))
+            Some(((ret1, self.current1), (ret2, self.current2)))
         }
     }
 }
+
+#[macro_export]
+macro_rules! concat_arrays {
+    ($(($arr:expr, $len:literal)),+ $(,)?) => {{
+        const TOTAL: usize = 0usize $(+ $len)+;
+        let mut out = ::std::mem::MaybeUninit::<[_; TOTAL]>::uninit();
+        unsafe {
+            #[inline(always)]
+            unsafe fn copy_into<T, const D: usize, const S: usize>(
+                dst: *mut [T; D], src: &[T; S], offset: usize,
+            ) {
+                ::std::ptr::copy_nonoverlapping(src.as_ptr(), (dst as *mut T).add(offset), S);
+            }
+            let mut offset = 0usize;
+            $(
+                copy_into(out.as_mut_ptr(), &{$arr}, offset);
+                offset += $len;
+            )+
+            let _ = offset;
+            out.assume_init()
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! slice_array {
+    ($arr:expr, $a:literal..$b:literal) => {{
+        let arr = $arr;
+        let mut result = ::std::mem::MaybeUninit::<[_; $b - $a]>::uninit();
+        #[allow(unused_unsafe)]
+        unsafe {
+            ::std::ptr::copy_nonoverlapping(
+                arr.as_ptr().add($a),
+                ::std::ptr::addr_of_mut!((*result.as_mut_ptr())[0]),
+                $b - $a,
+            );
+            result.assume_init()
+        }
+    }};
+}
+
+include!("../split_windows_test.rs");
 
 #[test]
 fn test() {
-    let slices = [(1, 3), (4, 4), (9, 13), (100, 101)];
-    let w11 = |mut wit: SlicesSplitWindowsIter<fn(usize) -> usize, 4, 1, 1>| {
-        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-        match (wit.first_exhausted(), wit.second_exhausted()) {
-            (true, true) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 2, 2>::from11(wit);
-                w11(wit);
-            },
-            (true, false) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 2, 1>::from10(wit);
-                w10(wit);
-            },
-            (false, true) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from01(wit);
-                w01(wit);
-            },
-            (false, false) => unreachable!(),
-        }
-    };
-    let w10 = |mut wit: SlicesSplitWindowsIter<fn(usize) -> usize, 4, 1, 0>| {
-        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-        match (wit.first_exhausted(), wit.second_exhausted()) {
-            (true, true) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 2, 1>::from11(wit);
-                w21(wit);
-            },
-            (true, false) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 2, 0>::from10(wit);
-                w20(wit);
-            },
-            (false, true) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from01(wit);
-                w11(wit);
-            },
-            (false, false) => unreachable!(),
-        }
-    };
-    let w01 = |mut wit: SlicesSplitWindowsIter<fn(usize) -> usize, 4, 0, 1>| {
-        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-        match (wit.first_exhausted(), wit.second_exhausted()) {
-            (true, true) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from11(wit);
-                w12(wit);
-            }
-            (true, false) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from10(wit);
-                w11(wit);
-            }
-            (false, true) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 0, 2>::from01(wit);
-                w02(wit);
-            }
-            (false, false) => unreachable!(),
-        }
-    };
-    let w00 = |mut wit: SlicesSplitWindowsIter<fn(usize) -> usize, 4, 0, 0>| {
-        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-        match (wit.first_exhausted(), wit.second_exhausted()) {
-            (true, true) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from11(wit);
-                w11(wit);
-            }
-            (true, false) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 1, 0>::from10(wit);
-                w10(wit);
-            }
-            (false, true) => {
-                println!("{:?}", (wit.current1, wit.current2));
-                let wit = SlicesSplitWindowsIter::<_, _, 0, 1>::from01(wit);
-                w01(wit);
-            }
-            (false, false) => unreachable!(),
-        }
-    };
-    match SlicesSplitWindowsIter::<_, _, 0, 0>::new(|x| x + 1, slices, 3) {
-        Ok(mut wit) => {
-            println!("{:?}", (&mut wit).collect::<Vec<_>>());
-            println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-            match (wit.first_exhausted(), wit.second_exhausted()) {
-                (true, true) => {
-                    println!("{:?}", (wit.current1, wit.current2));
-                    let mut wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from11(wit);
-                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                }
-                (true, false) => {
-                    println!("{:?}", (wit.current1, wit.current2));
-                    let mut wit = SlicesSplitWindowsIter::<_, _, 1, 0>::from10(wit);
-                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                }
-                (false, true) => {
-                    println!("{:?}", (wit.current1, wit.current2));
-                    let mut wit = SlicesSplitWindowsIter::<_, _, 0, 1>::from01(wit);
-                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                    println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-                    match (wit.first_exhausted(), wit.second_exhausted()) {
-                        (true, true) => {
-                            println!("{:?}", (wit.current1, wit.current2));
-                            let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from11(wit);
-                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                        }
-                        (true, false) => {
-                            println!("{:?}", (wit.current1, wit.current2));
-                            let mut wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from10(wit);
-                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                            println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-                            match (wit.first_exhausted(), wit.second_exhausted()) {
-                                (true, true) => {
-                                    println!("{:?}", (wit.current1, wit.current2));
-                                    let mut wit = SlicesSplitWindowsIter::<_, _, 2, 2>::from11(wit);
-                                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                }
-                                (true, false) => {
-                                    println!("{:?}", (wit.current1, wit.current2));
-                                    let mut wit = SlicesSplitWindowsIter::<_, _, 2, 1>::from10(wit);
-                                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                }
-                                (false, true) => {
-                                    println!("{:?}", (wit.current1, wit.current2));
-                                    let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from01(wit);
-                                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                    println!(
-                                        "<{:?}>",
-                                        (wit.first_exhausted(), wit.second_exhausted())
-                                    );
-                                    match (wit.first_exhausted(), wit.second_exhausted()) {
-                                        (true, true) => {
-                                            println!("{:?}", (wit.current1, wit.current2));
-                                        }
-                                        (true, false) => {
-                                            println!("{:?}", (wit.current1, wit.current2));
-                                            let mut wit =
-                                                SlicesSplitWindowsIter::<_, _, 2, 2>::from10(wit);
-                                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                        }
-                                        (false, true) => {
-                                            println!("{:?}", (wit.current1, wit.current2));
-                                        }
-                                        (false, false) => unreachable!(),
-                                    }
-                                }
-                                (false, false) => unreachable!(),
-                            }
-                        }
-                        (false, true) => {
-                            println!("{:?}", (wit.current1, wit.current2));
-                            let mut wit = SlicesSplitWindowsIter::<_, _, 0, 2>::from01(wit);
-                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                        }
-                        (false, false) => unreachable!(),
-                    }
-                }
-                (false, false) => unreachable!(),
-            }
-        }
-        Err(cnt) => match SlicesSplitWindowsIter::<_, _, 0, 1>::new(|x| x + 1, slices, cnt) {
-            Ok(mut wit) => {
-                println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-                match (wit.first_exhausted(), wit.second_exhausted()) {
-                    (true, true) => {
-                        println!("{:?}", (wit.current1, wit.current2));
-                        let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from11(wit);
-                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                    }
-                    (true, false) => {
-                        println!("{:?}", (wit.current1, wit.current2));
-                        let mut wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from10(wit);
-                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-                        match (wit.first_exhausted(), wit.second_exhausted()) {
-                            (true, true) => {
-                                println!("{:?}", (wit.current1, wit.current2));
-                                let mut wit = SlicesSplitWindowsIter::<_, _, 2, 2>::from11(wit);
-                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                            }
-                            (true, false) => {
-                                println!("{:?}", (wit.current1, wit.current2));
-                                let mut wit = SlicesSplitWindowsIter::<_, _, 2, 1>::from10(wit);
-                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                            }
-                            (false, true) => {
-                                println!("{:?}", (wit.current1, wit.current2));
-                                let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from01(wit);
-                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-                                match (wit.first_exhausted(), wit.second_exhausted()) {
-                                    (true, true) => {
-                                        println!("{:?}", (wit.current1, wit.current2));
-                                    }
-                                    (true, false) => {
-                                        println!("{:?}", (wit.current1, wit.current2));
-                                        let mut wit =
-                                            SlicesSplitWindowsIter::<_, _, 2, 2>::from10(wit);
-                                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                    }
-                                    (false, true) => {
-                                        println!("{:?}", (wit.current1, wit.current2));
-                                    }
-                                    (false, false) => unreachable!(),
-                                }
-                            }
-                            (false, false) => unreachable!(),
-                        }
-                    }
-                    (false, true) => {
-                        println!("{:?}", (wit.current1, wit.current2));
-                        let mut wit = SlicesSplitWindowsIter::<_, _, 0, 2>::from01(wit);
-                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                        println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-                        match (wit.first_exhausted(), wit.second_exhausted()) {
-                            (true, true) => {
-                                println!("{:?}", (wit.current1, wit.current2));
-                            }
-                            (true, false) => {
-                                println!("{:?}", (wit.current1, wit.current2));
-                                let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from10(wit);
-                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-                                match (wit.first_exhausted(), wit.second_exhausted()) {
-                                    (true, true) => {
-                                        println!("{:?}", (wit.current1, wit.current2));
-                                    }
-                                    (true, false) => {
-                                        println!("{:?}", (wit.current1, wit.current2));
-                                        let mut wit =
-                                            SlicesSplitWindowsIter::<_, _, 2, 2>::from10(wit);
-                                        println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                        match (wit.first_exhausted(), wit.second_exhausted()) {
-                                            (true, true) => {
-                                                println!("{:?}", (wit.current1, wit.current2));
-                                            }
-                                            (true, false) => {
-                                                println!("{:?}", (wit.current1, wit.current2));
-                                                let mut wit =
-                                                    SlicesSplitWindowsIter::<_, _, 3, 2>::from10(
-                                                        wit,
-                                                    );
-                                                println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                                            }
-                                            (false, true) => {
-                                                println!("{:?}", (wit.current1, wit.current2));
-                                            }
-                                            (false, false) => unreachable!(),
-                                        }
-                                    }
-                                    (false, true) => {
-                                        println!("{:?}", (wit.current1, wit.current2));
-                                    }
-                                    (false, false) => unreachable!(),
-                                }
-                            }
-                            (false, true) => {
-                                println!("{:?}", (wit.current1, wit.current2));
-                            }
-                            (false, false) => unreachable!(),
-                        }
-                    }
-                    (false, false) => unreachable!(),
-                }
-            }
-            Err(cnt) => match SlicesSplitWindowsIter::<_, _, 0, 2>::new(|x| x + 1, slices, cnt) {
-                Ok(mut wit) => {
-                    println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                    println!("<{:?}>", (wit.first_exhausted(), wit.second_exhausted()));
-                    match (wit.first_exhausted(), wit.second_exhausted()) {
-                        (true, true) => {
-                            println!("{:?}", (wit.current1, wit.current2));
-                        }
-                        (true, false) => {
-                            println!("{:?}", (wit.current1, wit.current2));
-                            let mut wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from10(wit);
-                            println!("{:?}", (&mut wit).collect::<Vec<_>>());
-                        }
-                        (false, true) => {
-                            println!("{:?}", (wit.current1, wit.current2));
-                        }
-                        (false, false) => unreachable!(),
-                    }
-                }
-                _ => {}
-            },
-        },
-    }
-}
-
-#[test]
-fn cross() {
-    let list = LinkedList::<usize>::new();
-    let (route_0, route_1) = ((1, 2), (3, 4));
-    // route_0 CASE 1
-    {
-        let route_3 = route_0;
-        // route_1 CASE 1
-        {
-            let route_5 = route_1;
-            // Final
-            let (route_6, route_7) = (route_5, route_3);
-        }
-        // route_1 CASE 2
-        {
-            for split in FuncIter::new(|x| list.successor(x), route_1.0, route_1.1) {
-                let (route_4, route_5) = ((route_1.0, split), (list.successor(split), route_1.1));
-                // Final
-                let (route_6, route_7) = (route_5, [route_3, route_4]);
-            }
-        }
-        // route_1 CASE 3
-        {
-            let route_4 = route_1;
-            // Final
-            let route_7 = [route_3, route_4];
-        }
-    }
-    // route_0 CASE 2
-    {
-        for split in FuncIter::new(|x| list.successor(x), route_0.0, route_0.1) {
-            let (route_2, route_3) = ((route_0.0, split), (list.successor(split), route_0.1));
-            // route_1 CASE 1
-            {
-                let route_5 = route_1;
-                // Final
-                let (route_6, route_7) = ([route_2, route_5], route_3);
-            }
-            // route_1 CASE 2
-            {
-                for split in FuncIter::new(|x| list.successor(x), route_1.0, route_1.1) {
-                    let (route_4, route_5) =
-                        ((route_1.0, split), (list.successor(split), route_1.1));
-                    // Final
-                    let (route_6, route_7) = ([route_2, route_5], [route_3, route_4]);
-                }
-            }
-            // route_1 CASE 3
-            {
-                let route_4 = route_1;
-                // Final
-                let (route_6, route_7) = (route_2, [route_3, route_4]);
-            }
-        }
-    }
-    // route_0 CASE 3
-    {
-        let route_2 = route_0;
-        // route_1 CASE 1
-        {
-            let route_5 = route_1;
-            // Final
-            let route_6 = [route_2, route_5];
-        }
-        // route_1 CASE 2
-        {
-            for split in FuncIter::new(|x| list.successor(x), route_1.0, route_1.1) {
-                let (route_4, route_5) = ((route_1.0, split), (list.successor(split), route_1.1));
-                // Final
-                let (route_6, route_7) = ([route_2, route_5], route_4);
-            }
-        }
-        // route_1 CASE 3
-        {
-            let route_4 = route_1;
-            // Final
-            let (route_6, route_7) = (route_2, route_4);
-        }
-    }
-}
-
-#[test]
-fn swap() {
-    for _ in 0..1 {
-        let (m, n) = (3, 3);
-        let list = LinkedList::<usize>::new();
-        let (route_0, route_1) = ((1, 2), (3, 4));
-        // route_0 prepare 1
-        let mut cnt = m - 1;
-        let mut split2 = route_0.0;
-        if split2 == route_0.1 {
-            continue;
-        }
-        while cnt > 0 {
-            let succ = list.successor(split2);
-            if succ == route_0.1 {
-                break;
-            }
-            split2 = succ;
-            cnt -= 1;
-        }
-        if cnt != 0 {
-            continue;
-        }
-        // route_0 CASE 1
-        {
-            let (route_3, route_4) = ((route_0.0, split2), (list.successor(split2), route_0.1));
-
-            ////////////////////////////////
-            // route_1 prepare 1
-            let mut cnt = n - 1;
-            let mut split2 = route_1.0;
-            if split2 == route_1.1 {
-                continue;
-            }
-            while cnt > 0 {
-                let succ = list.successor(split2);
-                if succ == route_1.1 {
-                    break;
-                }
-                split2 = succ;
-                cnt -= 1;
-            }
-            if cnt != 0 {
-                continue;
-            }
-            // route_1 CASE 1
-            {
-                let (route_6, route_7) = ((route_1.0, split2), (list.successor(split2), route_1.1));
-                // Final
-                let route_9 = [route_6, route_4];
-                let route_11 = [route_3, route_7];
-            }
-            // route_1 CASE 2
-            let mut split1 = route_1.0;
-            {
-                loop {
-                    let succ = list.successor(split2);
-                    if succ == route_1.1 {
-                        break;
-                    }
-                    split2 = succ;
-                    let (route_5, route_6, route_7) = (
-                        (route_1.0, split1),
-                        (list.successor(split1), split2),
-                        (list.successor(split2), route_1.1),
-                    );
-                    split1 = list.successor(split1);
-                    // Final
-                    let route_9 = [route_6, route_4];
-                    let route_11 = [route_5, route_3, route_7];
-                }
-            }
-            // route_1 CASE 3
-            {
-                split1 = list.successor(split1);
-                let (route_5, route_6) = ((route_0.0, split1), (list.successor(split1), route_0.1));
-                // Final
-                let route_9 = [route_6, route_4];
-                let route_11 = [route_5, route_3];
-            }
-            ///////////////////////////////
-        }
-        // route_0 CASE 2
-        let mut split1 = route_0.0;
-        {
-            loop {
-                let succ = list.successor(split2);
-                if succ == route_0.1 {
-                    break;
-                }
-                split2 = succ;
-                let (route_2, route_3, route_4) = (
-                    (route_0.0, split1),
-                    (list.successor(split1), split2),
-                    (list.successor(split2), route_0.1),
-                );
-                split1 = list.successor(split1);
-                ////////////////////////////////
-                // route_1 prepare 1
-                let mut cnt = n - 1;
-                let mut split2 = route_1.0;
-                if split2 == route_1.1 {
-                    continue;
-                }
-                while cnt > 0 {
-                    let succ = list.successor(split2);
-                    if succ == route_1.1 {
-                        break;
-                    }
-                    split2 = succ;
-                    cnt -= 1;
-                }
-                if cnt != 0 {
-                    continue;
-                }
-                // route_1 CASE 1
-                {
-                    let (route_6, route_7) =
-                        ((route_1.0, split2), (list.successor(split2), route_1.1));
-                    // Final
-                    let route_9 = [route_2, route_6, route_4];
-                    let route_11 = [route_3, route_7];
-                }
-                // route_1 CASE 2
-                let mut split1 = route_1.0;
-                {
-                    loop {
-                        let succ = list.successor(split2);
-                        if succ == route_1.1 {
-                            break;
-                        }
-                        split2 = succ;
-                        let (route_5, route_6, route_7) = (
-                            (route_1.0, split1),
-                            (list.successor(split1), split2),
-                            (list.successor(split2), route_1.1),
-                        );
-                        split1 = list.successor(split1);
-                        // Final
-                        let route_9 = [route_2, route_6, route_4];
-                        let route_11 = [route_5, route_3, route_7];
-                    }
-                }
-                // route_1 CASE 3
-                {
-                    split1 = list.successor(split1);
-                    let (route_5, route_6) =
-                        ((route_0.0, split1), (list.successor(split1), route_0.1));
-                    // Final
-                    let route_9 = [route_2, route_6, route_4];
-                    let route_11 = [route_5, route_3];
-                }
-                ///////////////////////////////
-            }
-        }
-        // route_0 CASE 3
-        {
-            split1 = list.successor(split1);
-            let (route_2, route_3) = ((route_0.0, split1), (list.successor(split1), route_0.1));
-            ////////////////////////////////
-            // route_1 prepare 1
-            let mut cnt = n - 1;
-            let mut split2 = route_1.0;
-            if split2 == route_1.1 {
-                continue;
-            }
-            while cnt > 0 {
-                let succ = list.successor(split2);
-                if succ == route_1.1 {
-                    break;
-                }
-                split2 = succ;
-                cnt -= 1;
-            }
-            if cnt != 0 {
-                continue;
-            }
-            // route_1 CASE 1
-            {
-                let (route_6, route_7) = ((route_1.0, split2), (list.successor(split2), route_1.1));
-                // Final
-                let route_9 = [route_2, route_6];
-                let route_11 = [route_3, route_7];
-            }
-            // route_1 CASE 2
-            let mut split1 = route_1.0;
-            {
-                loop {
-                    let succ = list.successor(split2);
-                    if succ == route_1.1 {
-                        break;
-                    }
-                    split2 = succ;
-                    let (route_5, route_6, route_7) = (
-                        (route_1.0, split1),
-                        (list.successor(split1), split2),
-                        (list.successor(split2), route_1.1),
-                    );
-                    split1 = list.successor(split1);
-                    // Final
-                    let route_9 = [route_2, route_6];
-                    let route_11 = [route_5, route_3, route_7];
-                }
-            }
-            // route_1 CASE 3
-            {
-                split1 = list.successor(split1);
-                let (route_5, route_6) = ((route_0.0, split1), (list.successor(split1), route_0.1));
-                // Final
-                let route_9 = [route_2, route_6];
-                let route_11 = [route_5, route_3];
-            }
-            ///////////////////////////////
-        }
-    }
+    let slices = [(1, 5), (7, 7), (9, 13), (100, 101)];
+    let succ = |x: usize| x + 1;
+    split_windows_4(succ, slices);
 }
