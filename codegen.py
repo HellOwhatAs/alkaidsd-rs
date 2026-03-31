@@ -30,7 +30,7 @@ def make_mid(
     second_exhausted: bool = False,
 ) -> str:
     if a == b:
-        assert not first_exhausted
+        # assert not first_exhausted
         if second_exhausted:
             return f"let mid = [(split1.1, slices[{b}].1)];"
         return "let mid = [(split1.1, split2.0)];"
@@ -50,9 +50,9 @@ def make_mid(
         case (True, True):
             return f"let mid = slice_array!(slices, {a + 1}..{b + 1});"
         case (True, False):
-            return f"let mid = concat_arrays!(slice_array!(slices, {a + 1}..{b}), [(slices[{b}].0, split2.0)]);"
+            return f"let mid = concat_arrays!((slice_array!(slices, {a + 1}..{b}), {b - a - 1}), ([(slices[{b}].0, split2.0)], 1));"
         case (False, True):
-            return f"let mid = concat_arrays!([(split1.1, slices[{a}].1)], slice_array!(slices, {a + 1}..{b + 1}));"
+            return f"let mid = concat_arrays!(([(split1.1, slices[{a}].1)], 1), (slice_array!(slices, {a + 1}..{b + 1}), {b - a}));"
         case (False, False):
             return (
                 f"let mid: [_; {b - a + 1}] = concat_arrays!("
@@ -65,7 +65,7 @@ def make_mid(
 def make_right(b: int, N: int, exhausted: bool = False) -> str:
     if b == N - 1:
         if exhausted:
-            return "let right: [(usize, usize); _] = [];"
+            return "let right: [(usize, usize); 0] = [];"
         return f"let right = [(split2.1, slices[{b}].1)];"
     if exhausted:
         return f"let right = slice_array!(slices, {b + 1}..{N});"
@@ -111,6 +111,14 @@ def split_windows(N: int, window: int) -> str:
             ((False, True), ft, "from01"),
         ]:
             lines.append(f"        ({', '.join(str(c).lower() for c in cond)}) => {{")
+            # if not cond[0]:
+            lines.append(
+                "            let split1 = (wit.current1, succ(wit.current1));"
+            )
+            # if not cond[1]:
+            lines.append(
+                "            let split2 = (wit.current2, succ(wit.current2));"
+            )
             lines.append("            " + make_left(a, exhausted=cond[0]))
             lines.append(
                 "            "
