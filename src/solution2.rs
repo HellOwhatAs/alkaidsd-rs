@@ -225,7 +225,15 @@ pub struct SlicesSplitWindowsIter<F, const N: usize, const I1: usize, const I2: 
     pub current2: usize,
 }
 
-impl<F, const N: usize, const I1: usize, const I2: usize> SlicesSplitWindowsIter<F, N, I1, I2>
+pub struct SlicesSplitWindowsIterBuilder<F, const N: usize, const I1: usize, const I2: usize> {
+    next: F,
+    slices: [(usize, usize); N],
+    pub current1: usize,
+    pub current2: usize,
+}
+
+impl<F, const N: usize, const I1: usize, const I2: usize>
+    SlicesSplitWindowsIterBuilder<F, N, I1, I2>
 where
     F: Fn(usize) -> usize,
 {
@@ -233,22 +241,38 @@ where
         const { assert!(I1 < N && I2 < N) };
         let mut cnt = window;
         let mut current = slices[I2].0;
+        let mut current1 = current;
         while cnt > 0 {
             cnt -= 1;
             if current == slices[I2].1 {
                 return Err(cnt);
             } else {
+                current1 = current;
                 current = (next)(current);
             }
         }
         Ok(Self {
             next,
             slices,
-            current1: slices[I1].0,
+            current1,
             current2: current,
         })
     }
 
+    pub fn build(self) -> SlicesSplitWindowsIter<F, N, I1, I2> {
+        SlicesSplitWindowsIter {
+            next: self.next,
+            slices: self.slices,
+            current1: self.slices[I1].0,
+            current2: self.current2,
+        }
+    }
+}
+
+impl<F, const N: usize, const I1: usize, const I2: usize> SlicesSplitWindowsIter<F, N, I1, I2>
+where
+    F: Fn(usize) -> usize,
+{
     pub fn from01<const I3: usize>(other: SlicesSplitWindowsIter<F, N, I1, I3>) -> Self {
         const { assert!(I1 < N && I2 < N && I3 < N) };
         const { assert!(I3 + 1 == I2) };
@@ -368,7 +392,7 @@ include!("../split_windows_test.rs");
 
 #[test]
 fn test() {
-    let slices = [(1, 5), (7, 7), (9, 13), (100, 101)];
+    let slices = [(1, 3), (7, 7), (9, 13), (100, 101)];
     let succ = |x: usize| x + 1;
     split_windows_4(succ, slices);
 }

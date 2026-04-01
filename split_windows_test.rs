@@ -5,31 +5,17 @@ let w33 = |mut wit: SlicesSplitWindowsIter<_, 4, 3, 3>| {
         let left: [_; 4] = concat_arrays!((slice_array!(slices, 0..3), 3), ([(slices[3].0, split1.0)], 1));
         let mid = [(split1.1, split2.0)];
         let right = [(split2.1, slices[3].1)];
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
-        (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
-            let left = slice_array!(slices, 0..4);
-            let mid = [(split1.1, slices[3].1)];
-            let right: [(usize, usize); 0] = [];
-        }
-        (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
-            let left = slice_array!(slices, 0..4);
-            let mid = [(split1.1, split2.0)];
-            let right = [(split2.1, slices[3].1)];
-        }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left: [_; 4] = concat_arrays!((slice_array!(slices, 0..3), 3), ([(slices[3].0, split1.0)], 1));
             let mid = [(split1.1, slices[3].1)];
             let right: [(usize, usize); 0] = [];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -39,33 +25,32 @@ let w23 = |mut wit: SlicesSplitWindowsIter<_, 4, 2, 3>| {
         let left: [_; 3] = concat_arrays!((slice_array!(slices, 0..2), 2), ([(slices[2].0, split1.0)], 1));
         let mid = [(split1.1, slices[2].1), (slices[3].0, split2.0)];
         let right = [(split2.1, slices[3].1)];
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
         (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = slice_array!(slices, 0..3);
             let mid = [slices[3]];
             let right: [(usize, usize); 0] = [];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
         }
         (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
             let split2 = (wit.current2, succ(wit.current2));
             let left = slice_array!(slices, 0..3);
             let mid = [(slices[3].0, split2.0)];
             let right = [(split2.1, slices[3].1)];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 3, 3>::from10(wit);
             w33(wit);
         }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left: [_; 3] = concat_arrays!((slice_array!(slices, 0..2), 2), ([(slices[2].0, split1.0)], 1));
             let mid = [(split1.1, slices[2].1), slices[3]];
             let right: [(usize, usize); 0] = [];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -75,33 +60,32 @@ let w13 = |mut wit: SlicesSplitWindowsIter<_, 4, 1, 3>| {
         let left: [_; 2] = concat_arrays!((slice_array!(slices, 0..1), 1), ([(slices[1].0, split1.0)], 1));
         let mid: [_; 3] = concat_arrays!(([(split1.1, slices[1].1)], 1), (slice_array!(slices, 2..3), 1), ([(slices[3].0, split2.0)], 1));
         let right = [(split2.1, slices[3].1)];
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
         (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = slice_array!(slices, 0..2);
             let mid = slice_array!(slices, 2..4);
             let right: [(usize, usize); 0] = [];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
         }
         (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
             let split2 = (wit.current2, succ(wit.current2));
             let left = slice_array!(slices, 0..2);
             let mid = concat_arrays!((slice_array!(slices, 2..3), 1), ([(slices[3].0, split2.0)], 1));
             let right = [(split2.1, slices[3].1)];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 2, 3>::from10(wit);
             w23(wit);
         }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left: [_; 2] = concat_arrays!((slice_array!(slices, 0..1), 1), ([(slices[1].0, split1.0)], 1));
             let mid = concat_arrays!(([(split1.1, slices[1].1)], 1), (slice_array!(slices, 2..4), 2));
             let right: [(usize, usize); 0] = [];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -111,35 +95,19 @@ let w22 = |mut wit: SlicesSplitWindowsIter<_, 4, 2, 2>| {
         let left: [_; 3] = concat_arrays!((slice_array!(slices, 0..2), 2), ([(slices[2].0, split1.0)], 1));
         let mid = [(split1.1, split2.0)];
         let right: [_; 2] = concat_arrays!(([(split2.1, slices[2].1)], 1), (slice_array!(slices, 3..4), 1));
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
-        (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
-            let left = slice_array!(slices, 0..3);
-            let mid = [(split1.1, slices[2].1)];
-            let right = slice_array!(slices, 3..4);
-            let wit = SlicesSplitWindowsIter::<_, _, 3, 3>::from11(wit);
-            w33(wit);
-        }
-        (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
-            let left = slice_array!(slices, 0..3);
-            let mid = [(split1.1, split2.0)];
-            let right: [_; 2] = concat_arrays!(([(split2.1, slices[2].1)], 1), (slice_array!(slices, 3..4), 1));
-        }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left: [_; 3] = concat_arrays!((slice_array!(slices, 0..2), 2), ([(slices[2].0, split1.0)], 1));
             let mid = [(split1.1, slices[2].1)];
             let right = slice_array!(slices, 3..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 2, 3>::from01(wit);
             w23(wit);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -149,33 +117,32 @@ let w03 = |mut wit: SlicesSplitWindowsIter<_, 4, 0, 3>| {
         let left = [(slices[0].0, split1.0)];
         let mid: [_; 4] = concat_arrays!(([(split1.1, slices[0].1)], 1), (slice_array!(slices, 1..3), 2), ([(slices[3].0, split2.0)], 1));
         let right = [(split2.1, slices[3].1)];
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
         (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = [slices[0]];
             let mid = slice_array!(slices, 1..4);
             let right: [(usize, usize); 0] = [];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
         }
         (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
             let split2 = (wit.current2, succ(wit.current2));
             let left = [slices[0]];
             let mid = concat_arrays!((slice_array!(slices, 1..3), 2), ([(slices[3].0, split2.0)], 1));
             let right = [(split2.1, slices[3].1)];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 1, 3>::from10(wit);
             w13(wit);
         }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = [(slices[0].0, split1.0)];
             let mid = concat_arrays!(([(split1.1, slices[0].1)], 1), (slice_array!(slices, 1..4), 3));
             let right: [(usize, usize); 0] = [];
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -185,37 +152,36 @@ let w12 = |mut wit: SlicesSplitWindowsIter<_, 4, 1, 2>| {
         let left: [_; 2] = concat_arrays!((slice_array!(slices, 0..1), 1), ([(slices[1].0, split1.0)], 1));
         let mid = [(split1.1, slices[1].1), (slices[2].0, split2.0)];
         let right: [_; 2] = concat_arrays!(([(split2.1, slices[2].1)], 1), (slice_array!(slices, 3..4), 1));
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
         (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = slice_array!(slices, 0..2);
             let mid = [slices[2]];
             let right = slice_array!(slices, 3..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 2, 3>::from11(wit);
             w23(wit);
         }
         (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
             let split2 = (wit.current2, succ(wit.current2));
             let left = slice_array!(slices, 0..2);
             let mid = [(slices[2].0, split2.0)];
             let right: [_; 2] = concat_arrays!(([(split2.1, slices[2].1)], 1), (slice_array!(slices, 3..4), 1));
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 2, 2>::from10(wit);
             w22(wit);
         }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left: [_; 2] = concat_arrays!((slice_array!(slices, 0..1), 1), ([(slices[1].0, split1.0)], 1));
             let mid = [(split1.1, slices[1].1), slices[2]];
             let right = slice_array!(slices, 3..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 1, 3>::from01(wit);
             w13(wit);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -225,37 +191,36 @@ let w02 = |mut wit: SlicesSplitWindowsIter<_, 4, 0, 2>| {
         let left = [(slices[0].0, split1.0)];
         let mid: [_; 3] = concat_arrays!(([(split1.1, slices[0].1)], 1), (slice_array!(slices, 1..2), 1), ([(slices[2].0, split2.0)], 1));
         let right: [_; 2] = concat_arrays!(([(split2.1, slices[2].1)], 1), (slice_array!(slices, 3..4), 1));
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
         (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = [slices[0]];
             let mid = slice_array!(slices, 1..3);
             let right = slice_array!(slices, 3..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 1, 3>::from11(wit);
             w13(wit);
         }
         (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
             let split2 = (wit.current2, succ(wit.current2));
             let left = [slices[0]];
             let mid = concat_arrays!((slice_array!(slices, 1..2), 1), ([(slices[2].0, split2.0)], 1));
             let right: [_; 2] = concat_arrays!(([(split2.1, slices[2].1)], 1), (slice_array!(slices, 3..4), 1));
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from10(wit);
             w12(wit);
         }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = [(slices[0].0, split1.0)];
             let mid = concat_arrays!(([(split1.1, slices[0].1)], 1), (slice_array!(slices, 1..3), 2));
             let right = slice_array!(slices, 3..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 0, 3>::from01(wit);
             w03(wit);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -265,35 +230,19 @@ let w11 = |mut wit: SlicesSplitWindowsIter<_, 4, 1, 1>| {
         let left: [_; 2] = concat_arrays!((slice_array!(slices, 0..1), 1), ([(slices[1].0, split1.0)], 1));
         let mid = [(split1.1, split2.0)];
         let right: [_; 3] = concat_arrays!(([(split2.1, slices[1].1)], 1), (slice_array!(slices, 2..4), 2));
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
-        (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
-            let left = slice_array!(slices, 0..2);
-            let mid = [(split1.1, slices[1].1)];
-            let right = slice_array!(slices, 2..4);
-            let wit = SlicesSplitWindowsIter::<_, _, 2, 2>::from11(wit);
-            w22(wit);
-        }
-        (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
-            let left = slice_array!(slices, 0..2);
-            let mid = [(split1.1, split2.0)];
-            let right: [_; 3] = concat_arrays!(([(split2.1, slices[1].1)], 1), (slice_array!(slices, 2..4), 2));
-        }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left: [_; 2] = concat_arrays!((slice_array!(slices, 0..1), 1), ([(slices[1].0, split1.0)], 1));
             let mid = [(split1.1, slices[1].1)];
             let right = slice_array!(slices, 2..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from01(wit);
             w12(wit);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -303,37 +252,36 @@ let w01 = |mut wit: SlicesSplitWindowsIter<_, 4, 0, 1>| {
         let left = [(slices[0].0, split1.0)];
         let mid = [(split1.1, slices[0].1), (slices[1].0, split2.0)];
         let right: [_; 3] = concat_arrays!(([(split2.1, slices[1].1)], 1), (slice_array!(slices, 2..4), 2));
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
         (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = [slices[0]];
             let mid = [slices[1]];
             let right = slice_array!(slices, 2..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 1, 2>::from11(wit);
             w12(wit);
         }
         (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
             let split2 = (wit.current2, succ(wit.current2));
             let left = [slices[0]];
             let mid = [(slices[1].0, split2.0)];
             let right: [_; 3] = concat_arrays!(([(split2.1, slices[1].1)], 1), (slice_array!(slices, 2..4), 2));
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from10(wit);
             w11(wit);
         }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = [(slices[0].0, split1.0)];
             let mid = [(split1.1, slices[0].1), slices[1]];
             let right = slice_array!(slices, 2..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 0, 2>::from01(wit);
             w02(wit);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
@@ -343,50 +291,86 @@ let w00 = |mut wit: SlicesSplitWindowsIter<_, 4, 0, 0>| {
         let left = [(slices[0].0, split1.0)];
         let mid = [(split1.1, split2.0)];
         let right: [_; 4] = concat_arrays!(([(split2.1, slices[0].1)], 1), (slice_array!(slices, 1..4), 3));
-        println!("{:?}", (left, mid, right));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
     }
     match (wit.first_exhausted(), wit.second_exhausted()) {
-        (true, true) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
-            let left = [slices[0]];
-            let mid = [(split1.1, slices[0].1)];
-            let right = slice_array!(slices, 1..4);
-            let wit = SlicesSplitWindowsIter::<_, _, 1, 1>::from11(wit);
-            w11(wit);
-        }
-        (true, false) => {
-            let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
-            let left = [slices[0]];
-            let mid = [(split1.1, split2.0)];
-            let right: [_; 4] = concat_arrays!(([(split2.1, slices[0].1)], 1), (slice_array!(slices, 1..4), 3));
-        }
         (false, true) => {
             let split1 = (wit.current1, succ(wit.current1));
-            let split2 = (wit.current2, succ(wit.current2));
             let left = [(slices[0].0, split1.0)];
             let mid = [(split1.1, slices[0].1)];
             let right = slice_array!(slices, 1..4);
+            println!("{:?}\t{:?}\t{:?}", left, mid, right);
             let wit = SlicesSplitWindowsIter::<_, _, 0, 1>::from01(wit);
             w01(wit);
         }
-        (false, false) => unreachable!(),
+        _ => unreachable!(),
     }
 };
 
 // --- entry point ---
-match SlicesSplitWindowsIter::<_, _, 0, 0>::new(succ, slices, 3) {
-    Ok(wit) => w00(wit),
+match SlicesSplitWindowsIterBuilder::<_, _, 0, 0>::new(succ, slices, 3) {
+    Ok(wib) => {
+        let left: [(usize, usize); _] = [];
+        let mid = [(slices[0].0, wib.current1)];
+        let right = concat_arrays!(([(wib.current2, slices[0].1)], 1), (slice_array!(slices, 1..4), 3));
+        println!("{:?}\t{:?}\t{:?}", left, mid, right);
+        let wit = wib.build();
+        w00(wit);
+    }
     Err(cnt) =>
-    match SlicesSplitWindowsIter::<_, _, 0, 1>::new(succ, slices, cnt) {
-        Ok(wit) => w01(wit),
+    match SlicesSplitWindowsIterBuilder::<_, _, 0, 1>::new(succ, slices, cnt) {
+        Ok(wib) => {
+            if wib.current2 == slices[1].0 {
+                let left: [(usize, usize); _] = [];
+                let mid = slice_array!(slices, 0..1);
+                let right = slice_array!(slices, 1..4);
+                println!("{:?}\t{:?}\t{:?}", left, mid, right);
+            } else {
+                let left: [(usize, usize); _] = [];
+                let split2 = (wib.current1, wib.current2);
+                let mid = [(slices[1].0, split2.0)];
+                let right: [_; 3] = concat_arrays!(([(split2.1, slices[1].1)], 1), (slice_array!(slices, 2..4), 2));
+                println!("{:?}\t{:?}\t{:?}", left, mid, right);
+            }
+            let wit = wib.build();
+            w01(wit);
+        }
         Err(cnt) =>
-        match SlicesSplitWindowsIter::<_, _, 0, 2>::new(succ, slices, cnt) {
-            Ok(wit) => w02(wit),
+        match SlicesSplitWindowsIterBuilder::<_, _, 0, 2>::new(succ, slices, cnt) {
+            Ok(wib) => {
+                if wib.current2 == slices[2].0 {
+                    let left: [(usize, usize); _] = [];
+                    let mid = slice_array!(slices, 0..2);
+                    let right = slice_array!(slices, 2..4);
+                    println!("{:?}\t{:?}\t{:?}", left, mid, right);
+                } else {
+                    let left: [(usize, usize); _] = [];
+                    let split2 = (wib.current1, wib.current2);
+                    let mid = concat_arrays!((slice_array!(slices, 1..2), 1), ([(slices[2].0, split2.0)], 1));
+                    let right: [_; 2] = concat_arrays!(([(split2.1, slices[2].1)], 1), (slice_array!(slices, 3..4), 1));
+                    println!("{:?}\t{:?}\t{:?}", left, mid, right);
+                }
+                let wit = wib.build();
+                w02(wit);
+            }
             Err(cnt) =>
-            match SlicesSplitWindowsIter::<_, _, 0, 3>::new(succ, slices, cnt) {
-                Ok(wit) => w03(wit),
+            match SlicesSplitWindowsIterBuilder::<_, _, 0, 3>::new(succ, slices, cnt) {
+                Ok(wib) => {
+                    if wib.current2 == slices[3].0 {
+                        let left: [(usize, usize); _] = [];
+                        let mid = slice_array!(slices, 0..3);
+                        let right = slice_array!(slices, 3..4);
+                        println!("{:?}\t{:?}\t{:?}", left, mid, right);
+                    } else {
+                        let left: [(usize, usize); _] = [];
+                        let split2 = (wib.current1, wib.current2);
+                        let mid = concat_arrays!((slice_array!(slices, 1..3), 2), ([(slices[3].0, split2.0)], 1));
+                        let right = [(split2.1, slices[3].1)];
+                        println!("{:?}\t{:?}\t{:?}", left, mid, right);
+                    }
+                    let wit = wib.build();
+                    w03(wit);
+                }
                 Err(_) => {} // window larger than all slices combined
             }
         }

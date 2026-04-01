@@ -100,7 +100,7 @@ def split_windows(N: int, window: int) -> str:
             "        " + make_left(a),
             "        " + make_mid(a, b),
             "        " + make_right(b, N),
-            '        println!("{:?}", (left, mid, right));',
+            '        println!("{:?}\\t{:?}\\t{:?}", left, mid, right);',
             "    }",
             "    match (wit.first_exhausted(), wit.second_exhausted()) {",
         ]
@@ -110,21 +110,26 @@ def split_windows(N: int, window: int) -> str:
             ((True, False), tf, "from10"),
             ((False, True), ft, "from01"),
         ]:
+            if a == b and cond[0]:
+                continue  # can't exhaust the first pointer if both pointers are in the same slice
             lines.append(f"        ({', '.join(str(c).lower() for c in cond)}) => {{")
-            # if not cond[0]:
-            lines.append(
-                "            let split1 = (wit.current1, succ(wit.current1));"
-            )
-            # if not cond[1]:
-            lines.append(
-                "            let split2 = (wit.current2, succ(wit.current2));"
-            )
+            if not cond[0]:
+                lines.append(
+                    "            let split1 = (wit.current1, succ(wit.current1));"
+                )
+            if not cond[1]:
+                lines.append(
+                    "            let split2 = (wit.current2, succ(wit.current2));"
+                )
             lines.append("            " + make_left(a, exhausted=cond[0]))
             lines.append(
                 "            "
                 + make_mid(a, b, first_exhausted=cond[0], second_exhausted=cond[1])
             )
             lines.append("            " + make_right(b, N, exhausted=cond[1]))
+            lines.append(
+                '            println!("{:?}\\t{:?}\\t{:?}", left, mid, right);'
+            )
             if next_state is not None:
                 na, nb = next_state
                 if na <= nb:
@@ -135,7 +140,7 @@ def split_windows(N: int, window: int) -> str:
             lines.append("        }")
 
         lines += [
-            "        (false, false) => unreachable!(),",
+            "        _ => unreachable!(),",
             "    }",
             "};",
             "",
@@ -149,9 +154,42 @@ def split_windows(N: int, window: int) -> str:
         indent = "    " * j
         cnt_arg = str(window) if j == 0 else "cnt"
         lines.append(
-            f"{indent}match SlicesSplitWindowsIter::<_, _, 0, {j}>::new(succ, slices, {cnt_arg}) {{"
+            f"{indent}match SlicesSplitWindowsIterBuilder::<_, _, 0, {j}>::new(succ, slices, {cnt_arg}) {{"
         )
-        lines.append(f"{indent}    Ok(wit) => w0{j}(wit),")
+        lines.append(f"{indent}    Ok(wib) => {{")
+        if j == 0:
+            lines.append(f"{indent}        let left: [(usize, usize); _] = [];")
+            lines.append(f"{indent}        let mid = [(slices[0].0, wib.current1)];")
+            lines.append(
+                f"{indent}        let right = concat_arrays!(([(wib.current2, slices[0].1)], 1), (slice_array!(slices, 1..{N}), {N - 1}));"
+            )
+            lines.append(
+                f'{indent}        println!("{{:?}}\\t{{:?}}\\t{{:?}}", left, mid, right);'
+            )
+        else:
+            lines.append(f"{indent}        if wib.current2 == slices[{j}].0 {{")
+            lines.append(f"{indent}            let left: [(usize, usize); _] = [];")
+            lines.append(f"{indent}            let mid = slice_array!(slices, 0..{j});")
+            lines.append(
+                f"{indent}            let right = slice_array!(slices, {j}..{N});"
+            )
+            lines.append(
+                f'{indent}            println!("{{:?}}\\t{{:?}}\\t{{:?}}", left, mid, right);'
+            )
+            lines.append(f"{indent}        }} else {{")
+            lines.append(f"{indent}            let left: [(usize, usize); _] = [];")
+            lines.append(
+                f"{indent}            let split2 = (wib.current1, wib.current2);"
+            )
+            lines.append(f"{indent}            " + make_mid(0, j, True, False))
+            lines.append(f"{indent}            " + make_right(j, N, False))
+            lines.append(
+                f'{indent}            println!("{{:?}}\\t{{:?}}\\t{{:?}}", left, mid, right);'
+            )
+            lines.append(f"{indent}        }}")
+        lines.append(f"{indent}        let wit = wib.build();")
+        lines.append(f"{indent}        w0{j}(wit);")
+        lines.append(f"{indent}    }}")
         if j < N - 1:
             lines.append(f"{indent}    Err(cnt) =>")
         else:
