@@ -328,7 +328,7 @@ match SlicesSplitWindowsIterBuilder::<_, _, 0, 0>::new(succ, slices, 3) {
             } else {
                 let left: [(usize, usize); _] = [];
                 let split2 = (wib.current1, wib.current2);
-                let mid = [(slices[1].0, split2.0)];
+                let mid: [_; 2] = concat_arrays!((slice_array!(slices, 0..1), 1), ([(slices[1].0, split2.0)], 1));
                 let right: [_; 3] = concat_arrays!(([(split2.1, slices[1].1)], 1), (slice_array!(slices, 2..4), 2));
                 println!("{:?}\t{:?}\t{:?}", left, mid, right);
             }
@@ -346,7 +346,7 @@ match SlicesSplitWindowsIterBuilder::<_, _, 0, 0>::new(succ, slices, 3) {
                 } else {
                     let left: [(usize, usize); _] = [];
                     let split2 = (wib.current1, wib.current2);
-                    let mid = concat_arrays!((slice_array!(slices, 1..2), 1), ([(slices[2].0, split2.0)], 1));
+                    let mid: [_; 3] = concat_arrays!((slice_array!(slices, 0..2), 2), ([(slices[2].0, split2.0)], 1));
                     let right: [_; 2] = concat_arrays!(([(split2.1, slices[2].1)], 1), (slice_array!(slices, 3..4), 1));
                     println!("{:?}\t{:?}\t{:?}", left, mid, right);
                 }
@@ -364,7 +364,7 @@ match SlicesSplitWindowsIterBuilder::<_, _, 0, 0>::new(succ, slices, 3) {
                     } else {
                         let left: [(usize, usize); _] = [];
                         let split2 = (wib.current1, wib.current2);
-                        let mid = concat_arrays!((slice_array!(slices, 1..3), 2), ([(slices[3].0, split2.0)], 1));
+                        let mid: [_; 4] = concat_arrays!((slice_array!(slices, 0..3), 3), ([(slices[3].0, split2.0)], 1));
                         let right = [(split2.1, slices[3].1)];
                         println!("{:?}\t{:?}\t{:?}", left, mid, right);
                     }

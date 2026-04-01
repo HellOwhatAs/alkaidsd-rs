@@ -181,7 +181,11 @@ def split_windows(N: int, window: int) -> str:
             lines.append(
                 f"{indent}            let split2 = (wib.current1, wib.current2);"
             )
-            lines.append(f"{indent}            " + make_mid(0, j, True, False))
+            lines.append(
+                f"{indent}            let mid: [_; {j + 1}] = concat_arrays!("
+                f"(slice_array!(slices, 0..{j}), {j}), "
+                f"([(slices[{j}].0, split2.0)], 1));"
+            )
             lines.append(f"{indent}            " + make_right(j, N, False))
             lines.append(
                 f'{indent}            println!("{{:?}}\\t{{:?}}\\t{{:?}}", left, mid, right);'
