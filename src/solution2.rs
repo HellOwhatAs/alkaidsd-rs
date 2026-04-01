@@ -1,3 +1,6 @@
+#[path = "./macro_cartesian.rs"]
+pub mod macro_cartesian;
+
 #[derive(Debug, Clone, Default)]
 struct NodeData<T> {
     succ: usize,
