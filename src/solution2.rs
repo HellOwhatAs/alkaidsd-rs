@@ -1,6 +1,3 @@
-#[path = "./macro_cartesian.rs"]
-pub mod macro_cartesian;
-
 #[derive(Debug, Clone, Default)]
 struct NodeData<T> {
     succ: usize,
@@ -397,5 +394,23 @@ include!("../split_windows_test.rs");
 fn test() {
     let slices = [(1, 3), (7, 7), (9, 13), (100, 101)];
     let succ = |x: usize| x + 1;
-    split_windows_4(succ, slices);
+    use hetero_cartesian::cartesian;
+
+    fn func<F: Fn(usize) -> usize + Copy>(succ: F, slices: [(usize, usize); 4]) {
+        cartesian! {
+            let (slices): ([(usize, usize); 4]) = slices;
+
+            split_windows_4(_, &succ, slices) =>
+                Slices3Handler::call
+                    <const N1: usize, const N2: usize, const N3: usize>
+                    (slice3: ([(usize, usize); N1], [(usize, usize); N2], [(usize, usize); N3]));
+            split_windows_4(_, |x| x, slices) =>
+                Slices3Handler::call
+                    <const N11: usize, const N21: usize, const N31: usize>
+                    (slice31: ([(usize, usize); N11], [(usize, usize); N21], [(usize, usize); N31]));
+            {
+                println!("{:?}", slice3);
+            }
+        }
+    }
 }
