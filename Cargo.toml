@@ -12,4 +12,4 @@ codegen-units = 1
 
 [dependencies]
 itertools = "0.14.0"
-hetero-cartesian = "0.1.0"
+hetero-cartesian = "0.2.0"
