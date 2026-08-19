@@ -1,22 +1,36 @@
 //! Main solver implementation.
 //!
-//! Implements the Alkaid algorithm for solving the Split Delivery Vehicle
-//! Routing Problem using adaptive large neighborhood search.
+//! Implements the Alkaid algorithm for solving Vehicle Routing Problems
+//! using adaptive large neighborhood search. The solver is generic over
+//! [`VrpVariant`], supporting multiple VRP variants (SDVRP, VRPPD, EVRP, etc.)
+//! with zero-cost abstraction.
+//!
+//! # Usage
+//!
+//! For SDVRP (backward compatible):
+//! ```rust,ignore
+//! let solver = AlkaidSolver::default();
+//! let solution = solver.solve(&mut config, &instance);
+//! ```
+//!
+//! For other variants:
+//! ```rust,ignore
+//! let solver = AlkaidSolver::default();
+//! let solution = solver.solve_variant::<MyVariant>(&mut config, &instance);
+//! ```
 
 use crate::acceptance_rule::AcceptanceRule;
 use crate::cache::CacheMap;
-use crate::construction::construct;
 use crate::instance::{Instance, Node};
 use crate::inter_operator::InterOperator;
 use crate::intra_operator::IntraOperator;
+use crate::problem::VrpVariant;
 use crate::random::Random;
-use crate::repair::repair;
 use crate::route_context::RouteContext;
 use crate::ruin_method::RuinMethod;
+use crate::sdvrp::Sdvrp;
 use crate::solution::AlkaidSolution;
 use crate::sorter::Sorter;
-use crate::split_reinsertion::split_reinsertion;
-use crate::utils::calc_fleet_lower_bound;
 use std::time::Instant;
 
 /// Listener trait for optimization events.
@@ -87,16 +101,17 @@ pub struct AlkaidSolver;
 
 impl AlkaidSolver {
     /// Performs intra-route search on a single route.
-    fn intra_route_search(
-        instance: &Instance,
+    fn intra_route_search<V: VrpVariant>(
+        instance: &V::Instance,
         config: &AlkaidConfig,
         route_index: Node,
         solution: &mut AlkaidSolution,
         context: &mut RouteContext,
         random: &mut Random,
     ) {
-        repair(instance, route_index, solution, context);
+        V::repair(instance, route_index, solution, context);
 
+        let base = V::base_instance(instance);
         let mut neighborhoods: Vec<usize> = (0..config.intra_operators.len()).collect();
 
         loop {
@@ -105,7 +120,7 @@ impl AlkaidSolver {
             let mut improved = false;
             for &neighborhood in &neighborhoods {
                 improved = config.intra_operators[neighborhood].apply(
-                    instance,
+                    base,
                     route_index,
                     solution,
                     context,
@@ -123,14 +138,15 @@ impl AlkaidSolver {
     }
 
     /// Performs randomized variable neighborhood descent across routes.
-    fn randomized_variable_neighborhood_descent(
-        instance: &Instance,
+    fn randomized_variable_neighborhood_descent<V: VrpVariant>(
+        instance: &V::Instance,
         config: &AlkaidConfig,
         solution: &mut AlkaidSolution,
         context: &mut RouteContext,
         random: &mut Random,
         cache_map: &mut CacheMap,
     ) {
+        let base = V::base_instance(instance);
         cache_map.reset(solution, context);
 
         loop {
@@ -143,7 +159,7 @@ impl AlkaidSolver {
                 let original_num_routes = context.num_routes();
 
                 let routes = config.inter_operators[neighborhood]
-                    .apply(instance, solution, context, random, cache_map);
+                    .apply(base, solution, context, random, cache_map);
 
                 if !routes.is_empty() {
                     let mut routes = routes;
@@ -181,7 +197,7 @@ impl AlkaidSolver {
                         context.set_head(num_routes, head);
                         context.update_route_context(solution, num_routes, 0);
                         cache_map.add_route(num_routes);
-                        Self::intra_route_search(
+                        Self::intra_route_search::<V>(
                             instance, config, num_routes, solution, context, random,
                         );
                         num_routes += 1;
@@ -201,8 +217,8 @@ impl AlkaidSolver {
     }
 
     /// Performs perturbation by ruining and repairing.
-    fn perturb(
-        instance: &Instance,
+    fn perturb<V: VrpVariant>(
+        instance: &V::Instance,
         sorter: &Sorter,
         blink_rate: f64,
         solution: &mut AlkaidSolution,
@@ -210,50 +226,57 @@ impl AlkaidSolver {
         random: &mut Random,
         ruin_method: &mut dyn RuinMethod,
     ) {
+        let base = V::base_instance(instance);
         context.calc_route_context(solution);
 
         // Ruin: get customers to remove
-        let customers = ruin_method.ruin(instance, solution, context, random);
+        let customers = ruin_method.ruin(base, solution, context, random);
 
         // Sort customers for reinsertion
         let mut customers = customers;
-        sorter.sort(instance, &mut customers, random);
+        sorter.sort(base, &mut customers, random);
 
-        // Remove all nodes serving the selected customers
-        for &customer in &customers {
-            for route_index in 0..context.num_routes() {
-                let mut node_index = context.head(route_index);
-                while node_index != 0 {
-                    let successor = solution.successor(node_index);
-                    if solution.customer(node_index) == customer {
-                        let predecessor = solution.predecessor(node_index);
-                        solution.remove(node_index);
-                        if predecessor == 0 {
-                            context.set_head(route_index, successor);
-                        }
-                        context.update_route_context(solution, route_index, predecessor);
-                    }
-                    node_index = successor;
-                }
-            }
-        }
+        // Remove all nodes serving the selected customers (variant-specific)
+        V::remove_customers(instance, &customers, solution, context);
 
-        // Repair: reinsert customers using split reinsertion
-        for &customer in &customers {
-            split_reinsertion(
-                instance,
-                customer,
-                instance.demands[customer as usize],
-                blink_rate,
-                solution,
-                context,
-                random,
-            );
-        }
+        // Reinsert customers (variant-specific)
+        V::reinsert_customers(instance, &customers, blink_rate, solution, context, random);
     }
 
-    /// Main solving method.
-    pub fn solve(&self, config: &mut AlkaidConfig, instance: &Instance) -> AlkaidSolution {
+    /// Solves a VRP instance using the specified variant.
+    ///
+    /// This is the generic solving method that works with any [`VrpVariant`].
+    /// The variant determines how construction, repair, and reinsertion are
+    /// performed, while operators work with the base [`Instance`] data.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `V` - The VRP variant to solve (e.g., [`Sdvrp`])
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Solver configuration (operators, acceptance rule, etc.)
+    /// * `instance` - The problem instance for the variant
+    ///
+    /// # Returns
+    ///
+    /// The best solution found within the time limit
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use alkaidsd::sdvrp::Sdvrp;
+    ///
+    /// let solver = AlkaidSolver::default();
+    /// let solution = solver.solve_variant::<Sdvrp>(&mut config, &instance);
+    /// ```
+    pub fn solve_variant<V: VrpVariant>(
+        &self,
+        config: &mut AlkaidConfig,
+        instance: &V::Instance,
+    ) -> AlkaidSolution {
+        let base = V::base_instance(instance);
+
         if let Some(ref mut listener) = config.listener {
             listener.on_start();
         }
@@ -267,12 +290,12 @@ impl AlkaidSolver {
         let start_time = Instant::now();
         let max_stagnation = config
             .max_stagnation
-            .min((instance.num_customers as i32) * (calc_fleet_lower_bound(instance) as i32));
+            .min((base.num_customers as i32) * (V::calc_fleet_lower_bound(instance) as i32));
 
         while start_time.elapsed().as_secs_f64() < config.time_limit {
-            // Construct initial solution
-            let mut solution = construct(instance, &mut random);
-            let mut objective = solution.calc_objective(instance);
+            // Construct initial solution (variant-specific)
+            let mut solution = V::construct(instance, &mut random);
+            let mut objective = V::calc_objective(instance, &solution);
             let mut iter_best_objective = objective;
             let mut new_solution = solution.clone();
             let mut num_stagnation = 0;
@@ -285,7 +308,7 @@ impl AlkaidSolver {
                 // Intra-route search on all routes
                 context.calc_route_context(&new_solution);
                 for i in 0..context.num_routes() {
-                    Self::intra_route_search(
+                    Self::intra_route_search::<V>(
                         instance,
                         config,
                         i,
@@ -296,7 +319,7 @@ impl AlkaidSolver {
                 }
 
                 // Inter-route search
-                Self::randomized_variable_neighborhood_descent(
+                Self::randomized_variable_neighborhood_descent::<V>(
                     instance,
                     config,
                     &mut new_solution,
@@ -305,7 +328,7 @@ impl AlkaidSolver {
                     &mut cache_map,
                 );
 
-                let new_objective = new_solution.calc_objective(instance);
+                let new_objective = V::calc_objective(instance, &new_solution);
 
                 // Update iteration best
                 if new_objective < iter_best_objective {
@@ -334,7 +357,7 @@ impl AlkaidSolver {
                 }
 
                 // Perturb
-                Self::perturb(
+                Self::perturb::<V>(
                     instance,
                     &config.sorter,
                     config.blink_rate,
@@ -351,6 +374,22 @@ impl AlkaidSolver {
         }
 
         best_solution
+    }
+
+    /// Solves an SDVRP instance (backward-compatible convenience method).
+    ///
+    /// This is equivalent to calling `solve_variant::<Sdvrp>(config, instance)`.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Solver configuration
+    /// * `instance` - The SDVRP problem instance
+    ///
+    /// # Returns
+    ///
+    /// The best solution found within the time limit
+    pub fn solve(&self, config: &mut AlkaidConfig, instance: &Instance) -> AlkaidSolution {
+        self.solve_variant::<Sdvrp>(config, instance)
     }
 }
 
